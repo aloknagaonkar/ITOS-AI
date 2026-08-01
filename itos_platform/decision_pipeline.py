@@ -28,6 +28,7 @@ from engines.market_cycle_engine import MarketCycleEngine
 from engines.stability_engine import RecommendationStabilityEngine
 from engines.trade_planner import InstitutionalDecisionMatrixEngine
 from .decision_context import DecisionContext
+from .institutional_metrics import InstitutionalMetrics, InstitutionalMetricsEngine
 from .safety_gate_policy import SafetyDecision, SafetyGatePolicy
 
 
@@ -57,6 +58,7 @@ class PipelineResults:
     data_health_result: Any
     decision_context: DecisionContext
     safety_decision: SafetyDecision
+    institutional_metrics: InstitutionalMetrics | None = None
 
     @property
     def ice_result(self) -> Any:
@@ -81,6 +83,7 @@ class DecisionPipeline:
     """Execute each existing engine once, in its characterized order."""
 
     ENGINE_ORDER = (
+        "InstitutionalMetricsEngine",
         "MarketCycleEngine", "RecommendationStabilityEngine", "PhaseTransitionEngine",
         "PatternRecognitionEngine", "TradeReadinessEngine", "InstitutionalRadarEngine",
         "MarketStoryEngine", "CandleDNAEngine", "SmartCandlestickEngine",
@@ -97,6 +100,8 @@ class DecisionPipeline:
     def execute(self, context: DecisionContext) -> PipelineResults:
         recommendation = context.recommendation
         snapshot = context.market_snapshot
+        institutional_metrics = context.institutional_metrics or InstitutionalMetricsEngine().analyze(context)
+        context = replace(context, institutional_metrics=institutional_metrics)
 
         cycle_result = MarketCycleEngine(
             institutional_compatibility=context.institutional
@@ -191,7 +196,7 @@ class DecisionPipeline:
         data_health_result = DataHealthEngine().analyze(snapshot)
         context = self._with_result(context, "data_health", data_health_result)
         safety_decision = self.safety_policy.enforce(recommendation, data_health_result=data_health_result)
-        return PipelineResults(cycle_result, stability_result, transition_result, pattern_result, readiness_result, radar_result, story_result, candle_dna_result, smart_candle_result, structure_result, footprint_result, false_breakout_result, confirmation_result, decision_matrix_result, flow_result, institutional_confidence_result, validation_result, early_warning_result, regime_result, smart_money_result, energy_result, data_health_result, context, safety_decision)
+        return PipelineResults(cycle_result, stability_result, transition_result, pattern_result, readiness_result, radar_result, story_result, candle_dna_result, smart_candle_result, structure_result, footprint_result, false_breakout_result, confirmation_result, decision_matrix_result, flow_result, institutional_confidence_result, validation_result, early_warning_result, regime_result, smart_money_result, energy_result, data_health_result, context, safety_decision, institutional_metrics)
 
     @staticmethod
     def _with_result(
