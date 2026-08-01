@@ -122,6 +122,8 @@ def test_service_preserves_pipeline_outputs_session_keys_and_order(monkeypatch):
     assert result.option_result is option_result
     assert result.intelligence is intelligence
     assert result.recommendation["market_cycle"] is result_value.metadata
+    assert result.cycle_meta is result.cycle_result.metadata
+    assert result.stability_meta is result.stability_result.metadata
     assert result.ai_trade_opportunity == {"decision": "WAIT"}
     assert {"trade_history", "trade_stats", "phase_history", "stability_history"} <= result.values.keys()
 
