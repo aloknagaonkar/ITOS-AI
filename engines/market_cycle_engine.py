@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
 import pandas as pd
 
 from .base_engine import BaseEngine, EngineResult
+from itos_platform import DecisionContext, MarketSnapshot
 
 
 def _safe(value: Any, default: float = 0.0) -> float:
@@ -23,15 +26,43 @@ def _clip(value: float) -> float:
 class MarketCycleEngine(BaseEngine):
     name = "Market Cycle"
 
-    def analyze(self, market_data: dict[str, Any]) -> EngineResult:
-        intelligence = market_data.get("intelligence", {})
-        option_result = market_data.get("option_result", {})
-        institutional = market_data.get("institutional") or {}
-        price = intelligence.get("price", {})
-        summary = option_result.get("summary", {})
-        candles = price.get("candles", pd.DataFrame())
+    def __init__(
+        self, *, institutional_compatibility: Mapping[str, Any] | None = None
+    ) -> None:
+        """Create the engine with temporary, non-snapshot institutional data.
 
-        if not isinstance(candles, pd.DataFrame) or len(candles) < 8:
+        Institutional history remains outside ``MarketSnapshot`` because it is
+        repository-derived decision context rather than point-in-time market
+        data.  New pipelines should prefer ``DecisionContext``; this explicitly
+        named constructor input lets the dashboard migrate independently.
+        """
+
+        self._institutional_compatibility = institutional_compatibility or {}
+
+    def analyze(
+        self,
+        market_snapshot: MarketSnapshot | DecisionContext | Mapping[str, Any],
+    ) -> EngineResult:
+        inputs = self._adapt_input(market_snapshot)
+        intelligence = inputs.snapshot.intelligence
+        intelligence = intelligence if isinstance(intelligence, Mapping) else {}
+        option_result = inputs.snapshot.option_result
+        option_result = option_result if isinstance(option_result, Mapping) else {}
+        institutional = inputs.institutional
+        price = intelligence.get("price", {})
+        price = price if isinstance(price, Mapping) else {}
+        summary = option_result.get("summary", {})
+        summary = summary if isinstance(summary, Mapping) else {}
+        candles = price.get("candles")
+        if not isinstance(candles, pd.DataFrame):
+            candles = inputs.snapshot.historical_candles
+
+        required_columns = {"open", "high", "low", "close", "volume"}
+        if (
+            not isinstance(candles, pd.DataFrame)
+            or len(candles) < 8
+            or not required_columns.issubset(candles.columns)
+        ):
             return EngineResult(
                 engine=self.name, score=20.0, vote="WAIT",
                 explanation=["Insufficient candle history for reliable market-cycle classification"],
@@ -146,3 +177,41 @@ class MarketCycleEngine(BaseEngine):
                 "direction": vote,
             },
         )
+
+    def _adapt_input(
+        self,
+        value: MarketSnapshot | DecisionContext | Mapping[str, Any],
+    ) -> "_MarketCycleInput":
+        """Normalize typed and legacy boundaries before running analysis once."""
+
+        institutional: Mapping[str, Any] = self._institutional_compatibility
+        if isinstance(value, DecisionContext):
+            snapshot = value.market_snapshot
+            candidate = value.historical_repositories.get("institutional")
+            if isinstance(candidate, Mapping):
+                institutional = candidate
+        elif isinstance(value, MarketSnapshot):
+            snapshot = value
+        elif isinstance(value, Mapping):
+            snapshot = MarketSnapshot.from_legacy(value)
+            candidate = value.get("institutional")
+            if isinstance(candidate, Mapping):
+                institutional = candidate
+        else:
+            raise TypeError(
+                "MarketCycleEngine requires MarketSnapshot, DecisionContext, "
+                "or a legacy market-data mapping"
+            )
+
+        # Touch the non-scoring context at the adapter boundary. It remains
+        # deliberately excluded from classifications and thresholds.
+        _ = (snapshot.timestamps, snapshot.data_quality)
+        return _MarketCycleInput(snapshot=snapshot, institutional=institutional)
+
+
+@dataclass(frozen=True)
+class _MarketCycleInput:
+    """Private normalized input; it does not introduce a competing engine model."""
+
+    snapshot: MarketSnapshot
+    institutional: Mapping[str, Any]

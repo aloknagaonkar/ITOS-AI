@@ -1,64 +1,79 @@
+"""Immutable inputs shared by the ITOS 2.0 decision pipeline."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
-import pandas as pd
+
+def recommendation_is_available(recommendation: Any) -> bool:
+    """Return whether a recommendation has the minimum decision identity."""
+
+    return isinstance(recommendation, Mapping) and all(
+        key in recommendation for key in ("side", "status")
+    )
+
 
 @dataclass(frozen=True)
 class MarketSnapshot:
-    """Canonical, point-in-time market inputs shared by analysis engines."""
+    """A point-in-time view of all market data used for a decision.
+
+    The containers are deliberately left in their provider-native forms during
+    the migration (for example, candle data remains a pandas DataFrame).  The
+    frozen boundary prevents pipeline stages from replacing any part of the
+    snapshot while preserving compatibility with today's analysis functions.
+    """
 
     option_result: Mapping[str, Any]
     intelligence: Mapping[str, Any]
-    institutional: Any = None
-    last_refresh: str = ""
+    historical_candles: Any = None
+    timestamps: Mapping[str, Any] = field(default_factory=dict)
+    selected_instrument: str = ""
+    expiry: str = ""
+    timeframe: int | str | None = None
+    data_quality: Mapping[str, Any] = field(default_factory=dict)
 
-    def get(self, key: str, default: Any = None) -> Any:
-        return getattr(self, key, default)
+    @classmethod
+    def from_legacy(cls, market_data: Mapping[str, Any]) -> "MarketSnapshot":
+        """Adapt the dictionary contract used by pre-2.0 callers."""
+
+        timestamps = dict(market_data.get("timestamps") or {})
+        if "last_refresh" in market_data:
+            timestamps.setdefault("last_refresh", market_data.get("last_refresh"))
+
+        data_quality = dict(market_data.get("data_quality") or {})
+        if "recommendation" in market_data:
+            data_quality.setdefault(
+                "recommendation_available",
+                recommendation_is_available(market_data.get("recommendation")),
+            )
+
+        return cls(
+            option_result=market_data.get("option_result") or {},
+            intelligence=market_data.get("intelligence") or {},
+            historical_candles=market_data.get(
+                "historical_pattern_candles", market_data.get("historical_candles")
+            ),
+            timestamps=timestamps,
+            selected_instrument=str(
+                market_data.get("selected_instrument")
+                or market_data.get("instrument_key")
+                or market_data.get("underlying")
+                or ""
+            ),
+            expiry=str(market_data.get("expiry") or ""),
+            timeframe=market_data.get("timeframe"),
+            data_quality=data_quality,
+        )
 
 
 @dataclass(frozen=True)
 class DecisionContext:
-    """Typed decision-layer inputs; never adds decision state to a snapshot."""
+    """Runtime dependencies and state accompanying a market snapshot."""
 
     market_snapshot: MarketSnapshot
-    recommendation: Mapping[str, Any]
-    cycle_result: Any | None
-    confidence_history: pd.DataFrame | Any = field(default_factory=pd.DataFrame)
-    phase_history: pd.DataFrame | Any = field(default_factory=pd.DataFrame)
-    runtime: Mapping[str, Any] = field(default_factory=dict)
-
-    def get(self, key: str, default: Any = None) -> Any:
-        if key == "market_snapshot":
-            return self.market_snapshot
-        if hasattr(self, key):
-            return getattr(self, key)
-        snapshot_value = self.market_snapshot.get(key, default)
-        if snapshot_value is not default:
-            return snapshot_value
-        return self.runtime.get(key, default)
-
-    @classmethod
-    def from_legacy(cls, values: Mapping[str, Any]) -> "DecisionContext":
-        snapshot = values.get("market_snapshot")
-        if not isinstance(snapshot, MarketSnapshot):
-            snapshot = MarketSnapshot(
-                option_result=values.get("option_result") or {},
-                intelligence=values.get("intelligence") or {},
-                institutional=values.get("institutional"),
-                last_refresh=str(values.get("last_refresh") or ""),
-            )
-        known = {
-            "market_snapshot", "option_result", "intelligence", "institutional",
-            "last_refresh", "recommendation", "cycle_result", "confidence_history",
-            "phase_history",
-        }
-        return cls(
-            market_snapshot=snapshot,
-            recommendation=values.get("recommendation") or {},
-            cycle_result=values.get("cycle_result"),
-            confidence_history=values.get("confidence_history"),
-            phase_history=values.get("phase_history"),
-            runtime={key: value for key, value in values.items() if key not in known},
-        )
+    historical_repositories: Mapping[str, Any] = field(default_factory=dict)
+    configuration: Mapping[str, Any] = field(default_factory=dict)
+    session_state: Mapping[str, Any] = field(default_factory=dict)
+    runtime_settings: Mapping[str, Any] = field(default_factory=dict)

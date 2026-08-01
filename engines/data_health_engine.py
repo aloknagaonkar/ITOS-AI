@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Mapping
+
+from itos_platform import MarketSnapshot
 
 from .base_engine import BaseEngine, EngineResult
 
@@ -11,19 +13,26 @@ class DataHealthEngine(BaseEngine):
 
     name = "Data Health Engine"
 
-    def __init__(self, recommendation: dict[str, Any] | None = None) -> None:
-        # Decision state is injected separately so it never contaminates MarketSnapshot.
-        self.recommendation = recommendation
+    def analyze(
+        self, market_data: MarketSnapshot | Mapping[str, Any]
+    ) -> EngineResult:
+        """Assess a snapshot, adapting the legacy mapping contract if needed."""
 
-    def analyze(self, market_data: dict[str, Any]) -> EngineResult:
+        snapshot = (
+            market_data
+            if isinstance(market_data, MarketSnapshot)
+            else MarketSnapshot.from_legacy(market_data)
+        )
         flags: list[str] = []
         explanations: list[str] = []
         score = 100.0
 
-        option_result = market_data.get("option_result") or {}
-        intelligence = market_data.get("intelligence") or {}
-        recommendation = self.recommendation if self.recommendation is not None else market_data.get("recommendation") or {}
-        last_refresh = str(market_data.get("last_refresh") or "").strip()
+        option_result = snapshot.option_result
+        intelligence = snapshot.intelligence
+        recommendation_available = bool(
+            snapshot.data_quality.get("recommendation_available", False)
+        )
+        last_refresh = str(snapshot.timestamps.get("last_refresh") or "").strip()
 
         chain = option_result.get("chain")
         chain_rows = len(chain) if hasattr(chain, "__len__") else 0
@@ -47,7 +56,7 @@ class DataHealthEngine(BaseEngine):
         else:
             explanations.append("Core market-state fields are present.")
 
-        if not recommendation:
+        if not recommendation_available:
             score -= 20
             flags.append("RECOMMENDATION_MISSING")
             explanations.append("Decision recommendation has not been produced.")
