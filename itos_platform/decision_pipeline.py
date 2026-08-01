@@ -94,13 +94,22 @@ class DecisionPipeline:
         "MarketRegimeEngine", "SmartMoneyIndexEngine", "MarketEnergyEngine", "DataHealthEngine",
     )
 
-    def __init__(self, safety_policy: SafetyGatePolicy | None = None) -> None:
+    def __init__(
+        self,
+        safety_policy: SafetyGatePolicy | None = None,
+        institutional_metrics_engine: InstitutionalMetricsEngine | None = None,
+    ) -> None:
         self.safety_policy = safety_policy or SafetyGatePolicy()
+        self.institutional_metrics_engine = (
+            institutional_metrics_engine or InstitutionalMetricsEngine()
+        )
 
     def execute(self, context: DecisionContext) -> PipelineResults:
         recommendation = context.recommendation
         snapshot = context.market_snapshot
-        institutional_metrics = context.institutional_metrics or InstitutionalMetricsEngine().analyze(context)
+        institutional_metrics = context.institutional_metrics
+        if institutional_metrics is None:
+            institutional_metrics = self.institutional_metrics_engine.analyze(context)
         context = replace(context, institutional_metrics=institutional_metrics)
 
         cycle_result = MarketCycleEngine(

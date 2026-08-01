@@ -1,5 +1,11 @@
 # Changelog
 
+## Sprint 10 - Institutional Metrics Adoption
+
+- Adopted the shared typed InstitutionalMetrics instance across Institutional Radar, Flow, Confidence, and Decision Matrix while retaining legacy mapping adapters.
+- Preserved existing formulas, thresholds, weights, decisions, execution order, and safety behavior, with quality-aware fallbacks for missing evidence.
+- Added parity and shared-instance characterization plus the Sprint 10 review and modified-source packages.
+
 ## Sprint 9 - Institutional Metrics v2 Foundation
 
 - Added immutable institutional metrics contracts, centralized option-chain normalization, and decision-neutral calculations for OI, PCR, Max Pain, volatility, Greeks, liquidity, and positioning.
