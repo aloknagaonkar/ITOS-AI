@@ -275,10 +275,12 @@ def test_service_preserves_pipeline_outputs_session_keys_and_order(harness):
     assert harness.calls["EarlyWarningEngine"]["validation_result"] is result.validation_result
     assert harness.calls["MarketRegimeEngine"]["flow_result"] is result.flow_result
     assert isinstance(harness.calls["DataHealthEngine"], MarketSnapshot)
+    assert harness.calls["MarketCycleEngine"] is harness.calls["DataHealthEngine"]
     assert harness.calls["DataHealthEngine"].option_result is harness.option_result
     assert harness.calls["DataHealthEngine"].historical_candles is state["historical_pattern_candles"]
     assert harness.calls["DataHealthEngine"].selected_instrument == "TEST"
     assert result.market_snapshot is harness.calls["DataHealthEngine"]
+    assert harness.calls["MarketCycleEngine.init"][1]["institutional_compatibility"] is None
     assert harness.calls["AITradeEngine"]["decision_matrix_result"] is result.decision_matrix_result
     assert harness.calls["AITradeEngine"]["trade_plan_result"] is result.trade_plan_result
 
@@ -305,6 +307,7 @@ def test_cached_execution_reuses_analysis_without_acquisition_or_writes(harness)
     assert result.option_result is harness.option_result
     assert result.intelligence is harness.intelligence
     assert result.market_snapshot is harness.calls["DataHealthEngine"]
+    assert result.market_snapshot is harness.calls["MarketCycleEngine"]
     assert (
         result.market_snapshot.historical_candles
         is state["historical_pattern_candles"]
