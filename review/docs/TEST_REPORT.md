@@ -1,5 +1,10 @@
-# Test Report
+# Sprint 13 Test Report
 
-pytest not executed by Codex — local validation required.
+Deterministic behavioural coverage was added for futures matrices, neutral/missing/proxy data, writing and buying confirmation, conflicts, liquidity, IV, Greeks, premium data, location and volume context, malformed inputs, confidence clamping, immutability, and dashboard-facing contracts.
 
-Deterministic contracts cover the location matrix, breakouts/retests, absorption, degradation, score bounds, context parity, and dashboard-facing fields. Run locally with `python -m pytest -q`. UI validation: `streamlit run app.py`.
+**pytest not executed by Codex — local validation required.**
+
+Local validation commands:
+
+- `python -m pytest -q`
+- `streamlit run app.py`

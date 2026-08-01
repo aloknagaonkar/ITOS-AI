@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     from .institutional_metrics import InstitutionalMetrics
     from .market_location import MarketLocation
     from .volume_structure import VolumeStructure
+    from .positioning_intelligence import PositioningIntelligence
 
 
 def recommendation_is_available(recommendation: Any) -> bool:
@@ -102,6 +103,7 @@ class DecisionContext:
     false_breakout_result: Any = None
     market_location: MarketLocation | None = None
     volume_structure: VolumeStructure | None = None
+    positioning_intelligence: PositioningIntelligence | None = None
 
     def __post_init__(self) -> None:
         """Reconcile canonical fields with Sprint 2 constructor aliases."""
@@ -122,6 +124,7 @@ class DecisionContext:
             "false_breakout_result": "false_breakout",
             "market_location": "market_location",
             "volume_structure": "volume_structure",
+            "positioning_intelligence": "positioning_intelligence",
         }
         for field_name, result_name in result_fields.items():
             value = getattr(self, field_name)
