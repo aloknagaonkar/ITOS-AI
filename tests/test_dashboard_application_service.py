@@ -248,8 +248,22 @@ def test_service_preserves_pipeline_outputs_session_keys_and_order(harness):
         "sync_trade_history",
     ):
         assert harness.events.index("build_recommendation") < harness.events.index(write)
-    assert harness.events.index("save_phase_history") < harness.events.index("read_phase_history")
-    assert harness.events.index("save_stability_history") < harness.events.index("read_stability_history")
+    phase_reads = [
+        index
+        for index, event in enumerate(harness.events)
+        if event == "read_phase_history"
+    ]
+    stability_reads = [
+        index
+        for index, event in enumerate(harness.events)
+        if event == "read_stability_history"
+    ]
+    assert len(phase_reads) == 2
+    assert len(stability_reads) == 2
+    assert phase_reads[0] < harness.events.index("RecommendationStabilityEngine")
+    assert stability_reads[0] < harness.events.index("RecommendationStabilityEngine")
+    assert harness.events.index("save_phase_history") < phase_reads[-1]
+    assert harness.events.index("save_stability_history") < stability_reads[-1]
     assert harness.events.index("save_confidence_history") < harness.events.index("sync_trade_history")
 
     assert state["option_result"] is harness.option_result
