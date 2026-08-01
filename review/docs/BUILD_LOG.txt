@@ -1,0 +1,23 @@
+Sprint 5 malformed-input parity fix build log
+==============================================
+
+Targeted pytest command:
+python -m pytest tests/test_structure_intelligence_context.py -q
+
+Complete blocking error:
+ERROR collecting tests/test_structure_intelligence_context.py
+ImportError while importing test module '/workspace/ITOS-AI/tests/test_structure_intelligence_context.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/root/.pyenv/versions/3.14.4/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+tests/test_structure_intelligence_context.py:3: in <module>
+    import pandas as pd
+E   ModuleNotFoundError: No module named 'pandas'
+
+=========================== short test summary info ============================
+ERROR tests/test_structure_intelligence_context.py
+!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+1 error in 0.23s
+
+No tests executed. No dependency installation or retry was attempted.
