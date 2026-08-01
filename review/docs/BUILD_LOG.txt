@@ -1,9 +1,22 @@
-MarketSnapshot UI integration validation — 2026-08-01
+Sprint 8 Codex Build Log
+========================
 
-PASS: python -m py_compile app.py dashboard_application_service.py
-Output: (none; exit status 0)
+Command:
+python -m py_compile dashboard_application_service.py itos_platform/__init__.py itos_platform/decision_pipeline.py itos_platform/safety_gate_policy.py tests/test_dashboard_application_service.py tests/test_decision_pipeline.py review/source/dashboard_application_service.py review/source/itos_platform/__init__.py review/source/itos_platform/decision_pipeline.py review/source/itos_platform/safety_gate_policy.py review/source/tests/test_dashboard_application_service.py review/source/tests/test_decision_pipeline.py
 
-PASS: git diff --check
-Output: (none; exit status 0)
+Complete output:
+(no stdout or stderr)
 
-NOT RUN: pytest (explicit user instruction)
+Exit code: 0
+Result: PASS
+
+Command:
+git diff --check
+
+Complete output:
+(no stdout or stderr)
+
+Exit code: 0
+Result: PASS
+
+pytest status: NOT RUN — LOCAL VALIDATION REQUIRED

@@ -1,5 +1,12 @@
-# Validation Report — MarketSnapshot UI Integration Repair
+# Sprint 8 Test Report
 
-Validation is limited to the explicitly requested compilation and diff checks. Pytest was intentionally not run.
+## Codex validation
 
-Repository searches confirmed that runtime source and review-source copies contain no remaining `engine_underlying`, `engine_expiry`, `engine_timeframe`, `tracked_underlying`, `tracked_expiry`, `stored_underlying`, or `stored_expiry` references.
+- `python -m py_compile <all modified Python files>`: required syntax validation only.
+- `git diff --check`: required patch whitespace validation only.
+- **pytest not executed by Codex.**
+- **Full local validation is required before merge:** `python -m pytest -q`.
+
+## Behavioural coverage added or retained
+
+The tests characterize engine order, result wiring, canonical snapshot/context identity, cached execution without acquisition or writes, existing false-breakout and validation vetoes, missing candles, acquisition/pipeline failure propagation without an AI BUY, malformed critical input, unhealthy data, dashboard result compatibility, and typed/legacy output aliases. The existing fixtures continue to exercise valid recommendation packaging; the full local suite is the acceptance gate for bullish and bearish parity.

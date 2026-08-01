@@ -4,6 +4,7 @@ import pandas as pd
 import pytest
 
 import dashboard_application_service as service_module
+import itos_platform.decision_pipeline as pipeline_module
 from dashboard_application_service import (
     DashboardApplicationService,
     DashboardDataUnavailable,
@@ -178,7 +179,7 @@ def harness(monkeypatch):
         return Engine
 
     for name in ENGINE_NAMES:
-        monkeypatch.setattr(service_module, name, engine_class(name))
+        monkeypatch.setattr(pipeline_module, name, engine_class(name))
 
     ai_packages = []
 
@@ -409,6 +410,29 @@ def test_critical_acquisition_failure_never_builds_or_emits_buy(harness, monkeyp
     assert "AITradeEngine" not in harness.events
 
 
+def test_critical_pipeline_failure_propagates_before_ai_or_persistence(harness):
+    class FailingPipeline:
+        def execute(self, context):
+            harness.events.append("pipeline_failure")
+            raise RuntimeError("critical engine failed")
+
+    service = DashboardApplicationService(
+        client_factory=harness.Client,
+        store_factory=harness.Store,
+        pipeline_factory=FailingPipeline,
+    )
+    with pytest.raises(RuntimeError, match="critical engine failed"):
+        service.execute(
+            token="token", instrument_key="NSE|TEST", underlying="TEST",
+            expiry="2026-08-06", timeframe=5, strikes=8,
+            save_snapshots=True, history_hours=8, should_load=True,
+            session_state={},
+        )
+
+    assert "AITradeEngine" not in harness.events
+    assert "save_phase_history" not in harness.events
+
+
 def test_incomplete_cached_data_never_builds_or_emits_buy(harness):
     with pytest.raises(DashboardDataUnavailable):
         _execute(harness, should_load=False, state={"option_result": harness.option_result})
@@ -422,6 +446,7 @@ def test_unavailable_candles_force_safe_wait_and_unhealthy_data(harness, monkeyp
     from engines.data_health_engine import DataHealthEngine as RealDataHealthEngine
 
     monkeypatch.setattr(service_module, "DataHealthEngine", RealDataHealthEngine)
+    monkeypatch.setattr(pipeline_module, "DataHealthEngine", RealDataHealthEngine)
 
     class EmptyCandleClient(harness.Client):
         def get_intraday_candles(self, *args, **kwargs):
