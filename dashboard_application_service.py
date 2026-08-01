@@ -25,6 +25,7 @@ from engines import (
     SmartMoneyIndexEngine, MarketEnergyEngine, DataHealthEngine,
 )
 from engines.ai_trade_engine import AITradeEngine
+from itos_platform.decision_context import DecisionContext, MarketSnapshot
 
 
 class DashboardDataUnavailable(RuntimeError):
@@ -129,16 +130,27 @@ class DashboardApplicationService:
                 self.warning(f"Historical flow could not be included in the current recommendation: {exc}")
 
         recommendation = build_recommendation(option_result, intelligence, institutional)
-        cycle_result = MarketCycleEngine().analyze({"option_result": option_result, "intelligence": intelligence, "institutional": institutional})
+        market_snapshot = MarketSnapshot(
+            option_result=option_result,
+            intelligence=intelligence,
+            institutional=institutional,
+            last_refresh=session_state.get("last_refresh", ""),
+        )
+        cycle_result = MarketCycleEngine().analyze(market_snapshot)
         engine_store = self.store_factory()
         engine_underlying = session_state.get("underlying", underlying)
         engine_expiry = session_state.get("expiry", expiry)
         prior_confidence_history = engine_store.get_confidence_history(engine_underlying, engine_expiry, hours=history_hours)
         prior_phase_history = engine_store.get_phase_history(engine_underlying, engine_expiry, hours=history_hours)
-        stability_result = RecommendationStabilityEngine(minimum_stability=70.0).analyze({
-            "recommendation": recommendation, "confidence_history": prior_confidence_history,
-            "phase_history": prior_phase_history, "cycle_result": cycle_result,
-        })
+        decision_context = DecisionContext(
+            market_snapshot=market_snapshot,
+            recommendation=recommendation,
+            cycle_result=cycle_result,
+            confidence_history=prior_confidence_history,
+            phase_history=prior_phase_history,
+            runtime={"minimum_stability": 70.0, "history_hours": history_hours},
+        )
+        stability_result = RecommendationStabilityEngine(minimum_stability=70.0).analyze(decision_context)
         transition_result = PhaseTransitionEngine().analyze({"cycle_result": cycle_result})
         pattern_result = PatternRecognitionEngine().analyze({"recommendation": recommendation, "option_result": option_result, "intelligence": intelligence, "institutional": institutional, "cycle_result": cycle_result})
         readiness_result = TradeReadinessEngine().analyze({"recommendation": recommendation, "cycle_result": cycle_result, "stability_result": stability_result, "pattern_result": pattern_result})
@@ -219,10 +231,10 @@ class DashboardApplicationService:
         except Exception as exc:
             self.warning(f"Trade history could not be updated: {exc}")
         trade_plan_result = None
-        data_health_result = DataHealthEngine().analyze({"option_result": option_result, "intelligence": intelligence, "recommendation": recommendation, "last_refresh": session_state.get("last_refresh", "")})
+        data_health_result = DataHealthEngine(recommendation=recommendation).analyze(market_snapshot)
         ai_trade_opportunity = AITradeEngine().build(recommendation=recommendation, trade_plan_result=trade_plan_result, decision_matrix_result=decision_matrix_result, regime_result=regime_result, flow_result=flow_result, confidence_history=confidence_history)
         names = locals()
-        consumed = "option_result intelligence institutional decision_history decision_strike_history recommendation cycle_result cycle_meta stability_result stability_meta transition_result pattern_result readiness_result radar_result story_result candle_dna_result smart_candle_result structure_result footprint_result false_breakout_result confirmation_result decision_matrix_result flow_result ice_result validation_result early_warning_result regime_result smi_result energy_result phase_history stability_history confidence_history trade_history trade_stats trade_plan_result data_health_result ai_trade_opportunity".split()
+        consumed = "option_result intelligence institutional decision_history decision_strike_history recommendation market_snapshot decision_context cycle_result cycle_meta stability_result stability_meta transition_result pattern_result readiness_result radar_result story_result candle_dna_result smart_candle_result structure_result footprint_result false_breakout_result confirmation_result decision_matrix_result flow_result ice_result validation_result early_warning_result regime_result smi_result energy_result phase_history stability_history confidence_history trade_history trade_stats trade_plan_result data_health_result ai_trade_opportunity".split()
         return DashboardApplicationResult({name: names[name] for name in consumed})
 
     @staticmethod
