@@ -113,3 +113,31 @@ def test_configuration_controls_minimum_candles():
     engine = VolumeStructureEngine(VolumeStructureSettings(minimum_candles=30))
     result = engine.analyze(DecisionContext(MarketSnapshot({}, {}, candles()), market_location=location("MIDDLE")))
     assert "CANDLES_INSUFFICIENT" in result.quality_flags
+
+
+def test_malformed_candle_envelope_degrades_safely():
+    frame = candles().copy()
+    frame.loc[3, "high"] = frame.loc[3, "close"] - 1
+    result = analyze("MIDDLE", "RISING", "RISING", frame=frame)
+    assert result.interpretation == "NEUTRAL"
+    assert "OHLC_INVALID" in result.quality_flags
+
+
+def test_confirmation_threshold_can_require_stronger_volume_evidence():
+    settings = VolumeStructureSettings(confirmation_threshold=1.0)
+    context = DecisionContext(
+        MarketSnapshot({}, {}, candles("RISING", "RISING")),
+        market_location=location("MIDDLE"),
+    )
+    result = VolumeStructureEngine(settings).analyze(context)
+    assert result.volume_confirmation == "NEUTRAL"
+    assert "EFFORT_RESULT_UNCONFIRMED" in result.quality_flags
+
+
+def test_exhaustion_score_uses_configured_spread_window():
+    frame = candles("RISING", "FALLING")
+    half_spreads = [0.5] * 19 + [0.5, 0.4, 0.3, 0.2, 0.1]
+    frame["high"] = frame["close"] + half_spreads
+    frame["low"] = frame["close"] - half_spreads
+    result = analyze("TOP", "RISING", "FALLING", frame=frame)
+    assert result.exhaustion_score >= 15

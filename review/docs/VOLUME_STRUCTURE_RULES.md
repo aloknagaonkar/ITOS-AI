@@ -19,3 +19,6 @@ Flags include `CANDLES_MISSING`, `CANDLES_INSUFFICIENT`, `OHLC_INVALID`, `VOLUME
 Defaults are: minimum candles 8; price lookback 6; flat threshold 0.0005; price weights 35/35/30; volume lookback 5; baseline 20; volume flat band 0.08; confirmation threshold 0.05; high effort 1.20; large result 0.60%; absorption 1.25x/0.35%; exhaustion lookback 5; accumulation and distribution weights 40/40/20; stale threshold 1800 seconds. Values live in `VolumeStructureSettings` and may be supplied under `volume_structure` in existing context configuration.
 
 Sprint 12 outputs are informational only and are not inputs to recommendations, confidence, safety, planning, or execution.
+
+## Sprint 12 hardening clarification
+OHLC validation also requires positive prices and a valid candle envelope (`low <= open/close <= high`). The configurable confirmation threshold is applied to volume-strength evidence before a moving-price observation can be called confirmed or diverging. The configured exhaustion window contributes shrinking-spread evidence; it does not create a recommendation. A moving price without enough confirmation evidence receives `EFFORT_RESULT_UNCONFIRMED`.
