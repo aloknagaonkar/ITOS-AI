@@ -1,9 +1,9 @@
 # Self Review
 
-- Confirmed the four scoped engines accept both `DecisionContext` and legacy mappings.
-- Confirmed each scoped engine uses one adapter and does not duplicate its scoring implementation.
-- Confirmed flow history is supplied by the context and the flow engine does not access repositories.
-- Confirmed history and results were not added to `MarketSnapshot`.
-- Confirmed the application service passes the same context to all four engines without reordering them.
-- Confirmed existing weights, thresholds, votes, grades, safety gates, and persistence calls were not intentionally changed.
-- Added parity and safe-degradation tests but did not execute pytest per sprint instructions.
+- Confirmed all four scoped engines retain legacy mapping entry points.
+- Confirmed each engine has one private adapter and no duplicated scoring implementation.
+- Confirmed the dashboard passes the identical `DecisionContext` instance to all four migrated engines.
+- Confirmed result registration occurs in the original execution sequence.
+- Confirmed snapshots contain no recommendation, engine result, history, or repository state.
+- Added neutral malformed-input coverage and a blocked-recommendation early-warning assertion.
+- Limited validation to the commands authorized by the sprint.

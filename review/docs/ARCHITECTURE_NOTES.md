@@ -1,8 +1,7 @@
 # Architecture Notes
 
-- `MarketSnapshot` remains point-in-time market data only.
-- `DecisionContext` owns decision-layer dependencies, including institutional summary, decision history, strike history, and engine results.
-- The application service, not `InstitutionalFlowEngine`, reads repositories.
-- Each migrated engine has exactly one private `_adapt_input` boundary for typed and legacy inputs; calculations are shared after adaptation.
-- `engine_results` remains the incremental compatibility registry used by the frozen context during ordered pipeline execution.
-- Engine order, gates, recommendation mutation, persistence, and dashboard result keys remain unchanged.
+- `MarketSnapshot` remains point-in-time provider data only.
+- `DecisionContext` owns recommendation, runtime configuration, histories, repositories, and engine dependencies.
+- Typed result fields support explicit construction; `engine_results` remains the live pipeline registry so results produced after context creation are visible without creating a second context.
+- Every migrated engine adapts typed or mapping input once, then executes its existing calculation path.
+- Dashboard construction counts remain exactly one snapshot and one context per execution, including cached execution.
