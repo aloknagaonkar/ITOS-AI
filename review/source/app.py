@@ -925,6 +925,18 @@ with tab_live:
     st.markdown("#### Market Status")
     status_location = market_location if market_location is not None else None
     status_volume = volume_structure if volume_structure is not None else None
+    status_positioning = positioning_intelligence if positioning_intelligence is not None else None
+    positioning_state = (
+        status_positioning.dominant_state
+        if status_positioning and status_positioning.dominant_state != "UNAVAILABLE"
+        else "Not available yet"
+    )
+    dominant_detail = None
+    if status_positioning:
+        dominant_detail = next(
+            (item for item in (status_positioning.futures, status_positioning.options)
+             if item.state == status_positioning.dominant_state), None
+        )
     flow_meta = getattr(flow_result, "metadata", {}) or {}
     status_values = [
         ("Location", getattr(status_location, "zone", "Unavailable")),
@@ -935,8 +947,10 @@ with tab_live:
         ("Institutional flow", flow_meta.get("direction", flow_meta.get("flow", "Unavailable"))),
         ("Interpretation", getattr(status_volume, "interpretation", "Unavailable")),
         ("Confidence", f"{status_volume.confidence:.0f}%" if status_volume else "Unavailable"),
+        ("Positioning", positioning_state),
+        ("Positioning meaning", dominant_detail.meaning if dominant_detail else "Not available yet"),
     ]
-    for column, (label, value) in zip(st.columns(8), status_values):
+    for column, (label, value) in zip(st.columns(10), status_values):
         column.metric(label, str(value).replace("_", " ").title())
 
     with st.expander("Market Location & Transition", expanded=False):
@@ -1002,6 +1016,38 @@ with tab_live:
             }
             st.table(pd.DataFrame(interpreted.items(), columns=["Interpretation", "Value"]))
             for explanation in volume_structure.explanations:
+                st.write(f"• {explanation}")
+
+    with st.expander("Positioning Intelligence", expanded=False):
+        if positioning_intelligence is None or (
+            positioning_intelligence.futures.state == "UNAVAILABLE"
+            and positioning_intelligence.options.state == "UNAVAILABLE"
+        ):
+            st.info("Positioning intelligence is unavailable.")
+        else:
+            for heading, state in (
+                ("Futures Positioning", positioning_intelligence.futures),
+                ("Options Positioning", positioning_intelligence.options),
+            ):
+                st.markdown(f"**{heading}**")
+                st.table(pd.DataFrame([
+                    ("State", state.display_state),
+                    ("Meaning", f"({state.meaning})"),
+                    ("Market Impact", state.market_impact),
+                    ("Confidence", f"{state.confidence:.0f}%"),
+                ], columns=["Interpretation", "Value"]))
+                st.markdown("**Measured evidence**")
+                st.write("\n".join(f"• {item}" for item in state.evidence) or "• None available")
+                st.markdown("**Contradictions**")
+                st.write("\n".join(f"• {item}" for item in state.contradictions) or "• None observed")
+            st.markdown("**Overall Positioning**")
+            st.table(pd.DataFrame([
+                ("Bias", positioning_intelligence.overall_bias.replace("_", " ").title()),
+                ("Dominant State", positioning_intelligence.dominant_state.replace("_", " ").title()),
+                ("Overall Confidence", f"{positioning_intelligence.overall_confidence:.0f}%"),
+                ("Quality Flags", ", ".join(positioning_intelligence.quality_flags) or "None"),
+            ], columns=["Interpretation", "Value"]))
+            for explanation in positioning_intelligence.explanations:
                 st.write(f"• {explanation}")
 
     with st.expander("Institutional Metrics v2 Preview", expanded=False):

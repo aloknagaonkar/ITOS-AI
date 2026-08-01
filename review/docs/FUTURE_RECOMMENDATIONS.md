@@ -1,3 +1,3 @@
 # Future Recommendations
 
-Deferred: Wyckoff phases, institutional-evidence aggregation, recommendation/confidence adoption, safety-policy changes, order execution, entry rules, ORB, Fibonacci, liquidity-sweep signals, and dashboard redesign. Any decision influence requires a separately reviewed sprint and calibrated evidence.
+Deferred, not implemented: Compression Intelligence, Manipulation Intelligence, Institutional Evidence, Decision Confidence Index, Market Narrative, historical learning, strike rotation/rollover, Wyckoff phases, ORB, Fibonacci logic, liquidity-sweep trade rules, trade-planner changes, automated execution, and dashboard cleanup/redesign. Future work may add provider-native futures history and typed strike-level dominant activity once reliable data contracts exist.

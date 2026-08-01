@@ -1,3 +1,3 @@
-# Architecture Notes
+# Sprint 13 Architecture Notes
 
-`VolumeStructureEngine` is repository- and UI-free. It consumes the canonical `DecisionContext` only after `MarketLocationEngine`, and its one immutable result is attached to the replaced context and `PipelineResults`. Recommendation and safety paths do not consume the result.
+The flow remains `MarketSnapshot → InstitutionalMetrics → DecisionContext → DecisionPipeline → PipelineResults → DashboardApplicationResult → app.py`. After Market Location and Volume Structure are available, `PositioningIntelligenceEngine` consumes only the supplied immutable context. It performs no repository or Streamlit access and creates no recommendation. The same frozen result is stored in `DecisionContext.engine_results`, the typed context field, and `PipelineResults`; the dashboard compatibility mapping exposes that object unchanged.
