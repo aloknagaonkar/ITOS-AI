@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Mapping
 
 import numpy as np
 import pandas as pd
 
 from .base_engine import BaseEngine, EngineResult
+from itos_platform.decision_context import DecisionContext
 
 
 class RecommendationStabilityEngine(BaseEngine):
@@ -14,11 +15,17 @@ class RecommendationStabilityEngine(BaseEngine):
     def __init__(self, minimum_stability: float = 70.0) -> None:
         self.minimum_stability = float(minimum_stability)
 
-    def analyze(self, market_data: dict[str, Any]) -> EngineResult:
-        recommendation = market_data.get("recommendation", {})
-        history = market_data.get("confidence_history")
-        phase_history = market_data.get("phase_history")
-        cycle = market_data.get("cycle_result")
+    def analyze(self, market_data: DecisionContext | Mapping[str, Any]) -> EngineResult:
+        """Analyze a typed context, adapting legacy dictionaries at the boundary."""
+        context = (
+            market_data
+            if isinstance(market_data, DecisionContext)
+            else DecisionContext.from_legacy(market_data)
+        )
+        recommendation = context.recommendation
+        history = context.confidence_history
+        phase_history = context.phase_history
+        cycle = context.cycle_result
 
         side = str(recommendation.get("side", "WAIT"))
         current_conf = float(recommendation.get("confidence", 0.0))
@@ -58,7 +65,8 @@ class RecommendationStabilityEngine(BaseEngine):
 
             manipulation = 0.0
             if cycle is not None:
-                manipulation = float(cycle.metadata.get("manipulation_score", 0.0))
+                cycle_metadata = getattr(cycle, "metadata", {}) or {}
+                manipulation = float(cycle_metadata.get("manipulation_score", 0.0))
 
             score = float(np.clip(
                 direction_consistency * 0.35

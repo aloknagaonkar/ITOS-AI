@@ -11,6 +11,10 @@ class DataHealthEngine(BaseEngine):
 
     name = "Data Health Engine"
 
+    def __init__(self, recommendation: dict[str, Any] | None = None) -> None:
+        # Decision state is injected separately so it never contaminates MarketSnapshot.
+        self.recommendation = recommendation
+
     def analyze(self, market_data: dict[str, Any]) -> EngineResult:
         flags: list[str] = []
         explanations: list[str] = []
@@ -18,7 +22,7 @@ class DataHealthEngine(BaseEngine):
 
         option_result = market_data.get("option_result") or {}
         intelligence = market_data.get("intelligence") or {}
-        recommendation = market_data.get("recommendation") or {}
+        recommendation = self.recommendation if self.recommendation is not None else market_data.get("recommendation") or {}
         last_refresh = str(market_data.get("last_refresh") or "").strip()
 
         chain = option_result.get("chain")
