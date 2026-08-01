@@ -1,5 +1,5 @@
-# Sprint 7 Summary
+# MarketSnapshot UI Integration Repair
 
-MarketRegimeEngine, SmartMoneyIndexEngine, MarketEnergyEngine, and EarlyWarningEngine now accept `DecisionContext` as their preferred input. Each retains a private legacy adapter and a single business-logic path. Dashboard execution reuses its one `MarketSnapshot` and one `DecisionContext`; result registration makes upstream dependencies available to later engines without placing runtime state in the snapshot.
+The Streamlit presentation layer now reads instrument, expiry, timeframe, and refresh metadata directly from the `DashboardApplicationResult.market_snapshot`. Legacy `engine_underlying`, `engine_expiry`, `tracked_underlying`, `tracked_expiry`, `stored_underlying`, and `stored_expiry` references were removed from download filenames, chart titles, dashboard labels, history reads, and report persistence calls.
 
-Compatibility mapping input remains supported. Optional malformed values normalize to neutral inputs, and a blocked or incomplete recommendation cannot produce an actionable early-warning vote.
+The application service also uses its canonical `MarketSnapshot` identity for all existing history operations. No trading logic, engine calculations, thresholds, recommendation behavior, dashboard layout, or persistence operations changed.
