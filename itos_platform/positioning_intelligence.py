@@ -145,11 +145,11 @@ class PositioningIntelligenceEngine:
         s: PositioningIntelligenceSettings,
         typed_context: bool = True,
     ) -> PositioningState:
-        volume = context.volume_structure
+        volume_structure = context.volume_structure
         flags: list[str] = []
         evidence: list[str] = []
         contradictions: list[str] = []
-        if typed_context and volume is None:
+        if typed_context and volume_structure is None:
             flags.append("VOLUME_STRUCTURE_UNAVAILABLE")
             evidence.append(
                 "Canonical volume-structure evidence is unavailable; "
@@ -162,7 +162,9 @@ class PositioningIntelligenceEngine:
                 contradictions,
                 flags,
             )
-        price = self._number(getattr(volume, "price_change_percent", None))
+        price = self._number(
+            getattr(volume_structure, "price_change_percent", None)
+        )
         if price is None and not typed_context:
             price = self._legacy_price_change(context)
         if price is None:
@@ -180,9 +182,9 @@ class PositioningIntelligenceEngine:
             flags.extend(("OI_UNAVAILABLE", "OI_HISTORY_INSUFFICIENT"))
         elif proxy:
             flags.append("FUTURES_OI_PROXY_ONLY")
-        if volume is None:
+        if volume_structure is None:
             flags.append("VOLUME_STRUCTURE_UNAVAILABLE")
-        elif "STALE_DATA" in getattr(volume, "quality_flags", ()):
+        elif "STALE_DATA" in getattr(volume_structure, "quality_flags", ()):
             flags.append("STALE_DATA")
         if context.market_location is None:
             flags.append("MARKET_LOCATION_UNAVAILABLE")
@@ -196,8 +198,12 @@ class PositioningIntelligenceEngine:
             return self._state("NEUTRAL", 20.0, evidence, contradictions, flags)
         state = {(1, 1): "LONG_BUILDUP", (-1, 1): "SHORT_BUILDUP", (1, -1): "SHORT_COVERING", (-1, -1): "LONG_UNWINDING"}[(price_direction, oi_direction)]
         confidence = s.price_oi_weight
-        confirmation = getattr(volume, "volume_confirmation", "UNAVAILABLE")
-        strength = self._number(getattr(volume, "volume_strength", None)) or 0.0
+        confirmation = getattr(
+            volume_structure, "volume_confirmation", "UNAVAILABLE"
+        )
+        strength = (
+            self._number(getattr(volume_structure, "volume_strength", None)) or 0.0
+        )
         if confirmation == "CONFIRMED" and strength >= s.minimum_volume_confirmation:
             confidence += s.volume_weight
             evidence.append("Price direction is confirmed by measured volume participation.")
