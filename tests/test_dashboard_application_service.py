@@ -8,6 +8,7 @@ from dashboard_application_service import (
     DashboardApplicationService,
     DashboardDataUnavailable,
 )
+from itos_platform import MarketSnapshot
 
 
 ENGINE_NAMES = [
@@ -273,6 +274,11 @@ def test_service_preserves_pipeline_outputs_session_keys_and_order(harness):
     assert harness.calls["SignalValidationEngine"]["ice_result"] is result.ice_result
     assert harness.calls["EarlyWarningEngine"]["validation_result"] is result.validation_result
     assert harness.calls["MarketRegimeEngine"]["flow_result"] is result.flow_result
+    assert isinstance(harness.calls["DataHealthEngine"], MarketSnapshot)
+    assert harness.calls["DataHealthEngine"].option_result is harness.option_result
+    assert harness.calls["DataHealthEngine"].historical_candles is state["historical_pattern_candles"]
+    assert harness.calls["DataHealthEngine"].selected_instrument == "TEST"
+    assert result.market_snapshot is harness.calls["DataHealthEngine"]
     assert harness.calls["AITradeEngine"]["decision_matrix_result"] is result.decision_matrix_result
     assert harness.calls["AITradeEngine"]["trade_plan_result"] is result.trade_plan_result
 
@@ -287,6 +293,7 @@ def test_cached_execution_reuses_analysis_without_acquisition_or_writes(harness)
         "intelligence": harness.intelligence,
         "underlying": "CACHED",
         "expiry": "2026-08-13",
+        "historical_pattern_candles": object(),
     }
     result = _execute(
         harness,
@@ -297,6 +304,11 @@ def test_cached_execution_reuses_analysis_without_acquisition_or_writes(harness)
 
     assert result.option_result is harness.option_result
     assert result.intelligence is harness.intelligence
+    assert result.market_snapshot is harness.calls["DataHealthEngine"]
+    assert (
+        result.market_snapshot.historical_candles
+        is state["historical_pattern_candles"]
+    )
     forbidden = {
         "acquire_option_chain",
         "normalize_option_chain",
