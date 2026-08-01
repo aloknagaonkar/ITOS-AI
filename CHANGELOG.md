@@ -1,6 +1,9 @@
 # Changelog
 
 ## Unreleased
+- Migrated `RecommendationStabilityEngine` to prefer `DecisionContext` while retaining parity-preserving legacy dictionary input.
+- Extended `DecisionContext` with explicit recommendation, engine-result, confidence-history, phase-history, and runtime-configuration fields without adding decision state to `MarketSnapshot`.
+- Updated dashboard orchestration to pass its single context to recommendation stability and its single snapshot to market-cycle and data-health analysis.
 - Migrated `MarketCycleEngine` to use the canonical typed `MarketSnapshot` input while preserving a legacy dictionary adapter and unchanged cycle decisions.
 - Updated the dashboard application pipeline so market-cycle and data-health analysis share the same snapshot instance.
 

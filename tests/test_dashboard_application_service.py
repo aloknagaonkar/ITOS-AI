@@ -8,7 +8,7 @@ from dashboard_application_service import (
     DashboardApplicationService,
     DashboardDataUnavailable,
 )
-from itos_platform import MarketSnapshot
+from itos_platform import DecisionContext, MarketSnapshot
 
 
 ENGINE_NAMES = [
@@ -66,6 +66,8 @@ def harness(monkeypatch):
     candles = pd.DataFrame({"timestamp": ["2026-07-31T09:15:00"]})
     option_result = {"summary": {"spot": 100}, "chain": chain}
     intelligence = {"price": {"trend": "Neutral"}}
+    confidence_history = pd.DataFrame({"side": ["CE"]})
+    phase_history = pd.DataFrame({"phase": ["Expansion"]})
 
     class Client:
         def __init__(self, token):
@@ -102,11 +104,11 @@ def harness(monkeypatch):
 
         def get_confidence_history(self, *args, **kwargs):
             events.append("read_confidence_history")
-            return pd.DataFrame()
+            return confidence_history
 
         def get_phase_history(self, *args, **kwargs):
             events.append("read_phase_history")
-            return pd.DataFrame()
+            return phase_history
 
         def get_stability_history(self, *args, **kwargs):
             events.append("read_stability_history")
@@ -201,6 +203,8 @@ def harness(monkeypatch):
         option_result=option_result,
         intelligence=intelligence,
         ai_packages=ai_packages,
+        confidence_history=confidence_history,
+        phase_history=phase_history,
     )
 
 
@@ -253,17 +257,17 @@ def test_service_preserves_pipeline_outputs_session_keys_and_order(harness):
         for index, event in enumerate(harness.events)
         if event == "read_phase_history"
     ]
-    stability_reads = [
+    confidence_reads = [
         index
         for index, event in enumerate(harness.events)
-        if event == "read_stability_history"
+        if event == "read_confidence_history"
     ]
     assert len(phase_reads) == 2
-    assert len(stability_reads) == 2
+    assert len(confidence_reads) == 2
     assert phase_reads[0] < harness.events.index("RecommendationStabilityEngine")
-    assert stability_reads[0] < harness.events.index("RecommendationStabilityEngine")
+    assert confidence_reads[0] < harness.events.index("RecommendationStabilityEngine")
     assert harness.events.index("save_phase_history") < phase_reads[-1]
-    assert harness.events.index("save_stability_history") < stability_reads[-1]
+    assert harness.events.index("save_confidence_history") < confidence_reads[-1]
     assert harness.events.index("save_confidence_history") < harness.events.index("sync_trade_history")
 
     assert state["option_result"] is harness.option_result
@@ -283,6 +287,15 @@ def test_service_preserves_pipeline_outputs_session_keys_and_order(harness):
     assert result.stability_meta is result.stability_result.metadata
 
     assert harness.calls["RecommendationStabilityEngine"].cycle_result is result.cycle_result
+    assert harness.calls["RecommendationStabilityEngine"].recommendation is result.recommendation
+    assert (
+        harness.calls["RecommendationStabilityEngine"].confidence_history
+        is harness.confidence_history
+    )
+    assert (
+        harness.calls["RecommendationStabilityEngine"].phase_history
+        is harness.phase_history
+    )
     assert isinstance(result.market_snapshot, MarketSnapshot)
     assert harness.calls["MarketCycleEngine"] is result.market_snapshot
     assert harness.calls["DataHealthEngine"] is result.market_snapshot

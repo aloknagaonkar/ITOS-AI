@@ -1,41 +1,25 @@
 # Sprint Summary
 
 ## Sprint Name
-Sprint 3 – Migrate RecommendationStabilityEngine to typed context
+Sprint 3 – Migrate RecommendationStabilityEngine to DecisionContext
 
-## Objective
-Move recommendation-stability evaluation to a typed decision contract without changing recommendation, stability, safety, dashboard, or trading behavior.
+## Delivered
+- Extended the immutable decision-layer contract with explicit recommendation,
+  engine-result, confidence-history, phase-history, and runtime-configuration fields.
+- Kept `MarketSnapshot` limited to point-in-time market data.
+- Added one private legacy adapter at the recommendation-stability boundary, so
+  dictionary and typed inputs share the unchanged calculation.
+- Wired one dashboard snapshot to market-cycle and data-health engines and one
+  context to recommendation stability.
+- Expanded parity and characterization coverage for direction, history quality,
+  thresholds, object identity, caching, engine order, and safety vetoes.
 
-## Architecture Changes
-- Introduced a canonical, immutable `MarketSnapshot` containing point-in-time market inputs only.
-- Introduced an immutable `DecisionContext` containing the snapshot, current recommendation, cycle result, histories, and runtime configuration.
-- Changed recommendation stability's preferred input to `DecisionContext`; legacy mappings are converted once at the engine boundary.
-- Dashboard orchestration now constructs and reuses one snapshot and one context.
+## Behavioral Compatibility
+Stability formulae, labels, trend and direction-change calculation, the 70% default
+threshold, pass/fail behavior, recommendation mutation, safety vetoes, engine order,
+session keys, persistence, and trading algorithms are unchanged.
 
-## Files Added
-- `itos_platform/decision_context.py`
-- `tests/test_stability_typed_context.py`
-- Six documents under `review/`
-
-## Files Modified
-- `CHANGELOG.md`
-- `dashboard_application_service.py`
-- `engines/data_health_engine.py`
-- `engines/stability_engine.py`
-- `itos_platform/__init__.py`
-- `tests/test_dashboard_application_service.py`
-
-## Files Removed
-None.
-
-## Backward Compatibility Notes
-Legacy dictionary callers of `RecommendationStabilityEngine.analyze` remain supported by `DecisionContext.from_legacy`. Stability calculations and returned `EngineResult` fields are shared with the typed path rather than duplicated.
-
-## Technical Debt
-Other engines still primarily expose dictionary-shaped interfaces. Data-health decision availability is injected into the engine constructor while its point-in-time inputs use the canonical snapshot.
-
-## Known Limitations
-The container lacks project dependencies and cannot download them because package-index access returns HTTP 403. Consequently pytest cannot collect tests in this environment.
-
-## Next Sprint Recommendation
-Migrate the next decision-layer engines to `DecisionContext`, then remove compatibility adapters only after all external dictionary callers have migrated.
+## Validation Status
+Static compilation and whitespace validation pass. The full pytest command was
+run, but missing pandas and NumPy stop collection before tests execute. The sprint
+is therefore not declared merge-gate complete in this environment.

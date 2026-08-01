@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 
 from .base_engine import BaseEngine, EngineResult
-from itos_platform.decision_context import DecisionContext
+from itos_platform.decision_context import DecisionContext, MarketSnapshot
 
 
 class RecommendationStabilityEngine(BaseEngine):
@@ -17,11 +17,7 @@ class RecommendationStabilityEngine(BaseEngine):
 
     def analyze(self, market_data: DecisionContext | Mapping[str, Any]) -> EngineResult:
         """Analyze a typed context, adapting legacy dictionaries at the boundary."""
-        context = (
-            market_data
-            if isinstance(market_data, DecisionContext)
-            else DecisionContext.from_legacy(market_data)
-        )
+        context = self._adapt_input(market_data)
         recommendation = context.recommendation
         history = context.confidence_history
         phase_history = context.phase_history
@@ -121,4 +117,46 @@ class RecommendationStabilityEngine(BaseEngine):
                 "minimum_required": self.minimum_stability,
                 "passed": passed,
             },
+        )
+
+    @staticmethod
+    def _adapt_input(
+        market_data: DecisionContext | Mapping[str, Any],
+    ) -> DecisionContext:
+        """Normalize the legacy mapping without duplicating stability logic."""
+
+        if isinstance(market_data, DecisionContext):
+            return market_data
+
+        snapshot = market_data.get("market_snapshot")
+        if not isinstance(snapshot, MarketSnapshot):
+            snapshot = MarketSnapshot.from_legacy(market_data)
+        cycle_result = market_data.get("cycle_result")
+        engine_results = dict(market_data.get("engine_results") or {})
+        if cycle_result is not None:
+            engine_results.setdefault("market_cycle", cycle_result)
+        known = {
+            "market_snapshot",
+            "recommendation",
+            "cycle_result",
+            "engine_results",
+            "confidence_history",
+            "phase_history",
+            "runtime",
+            "runtime_configuration",
+        }
+        runtime_configuration = dict(market_data.get("runtime") or {})
+        runtime_configuration.update(
+            market_data.get("runtime_configuration") or {}
+        )
+        runtime_configuration.update(
+            {key: value for key, value in market_data.items() if key not in known}
+        )
+        return DecisionContext(
+            market_snapshot=snapshot,
+            recommendation=market_data.get("recommendation") or {},
+            engine_results=engine_results,
+            confidence_history=market_data.get("confidence_history"),
+            phase_history=market_data.get("phase_history"),
+            runtime_configuration=runtime_configuration,
         )
