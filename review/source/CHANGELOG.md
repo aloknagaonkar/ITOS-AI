@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — Resilient Upstox Candle Acquisition
+- Prefer the Upstox V3 intraday candle endpoint with exactly-once instrument-key encoding.
+- Fall back to the latest trading day returned by the V3 historical candle endpoint.
+- Normalize empty, missing, malformed, and non-200 candle responses without exposing tokens in logs.
+- Block trading, force WAIT, and warn the dashboard when all candle sources are unavailable.
+- Add acquisition and downstream safety regression coverage.
+
+
 ## Sprint 7 - Market State & Early Warning Migration
 
 - Migrated Market Regime, Smart Money Index, Market Energy, and Early Warning engines to prefer the canonical `DecisionContext` while retaining legacy mapping inputs.
