@@ -33,27 +33,30 @@ def _result(**metadata):
 
 
 def test_pipeline_results_legacy_mapping_is_named_and_authoritative():
-    result_objects = [_result() for _ in range(22)]
+    result_field_names = [
+        field.name
+        for field in fields(PipelineResults)
+        if field.name not in {"decision_context", "safety_decision"}
+    ]
+    result_objects = {
+        name: SimpleNamespace(field_name=name) for name in result_field_names
+    }
     context = DecisionContext(
         market_snapshot=MarketSnapshot(option_result={}, intelligence={})
     )
     decision = SimpleNamespace(trade_allowed=True, final_state="BUY", blockers=(), reasons=())
-    results = PipelineResults(*result_objects, context, decision)
+    results = PipelineResults(
+        **result_objects,
+        decision_context=context,
+        safety_decision=decision,
+    )
 
     mapping = results.dashboard_values()
-    named_fields = [
-        field.name for field in fields(PipelineResults)
-        if field.name not in {"decision_context", "safety_decision"}
-    ]
-    for index, name in enumerate(named_fields):
-        assert getattr(results, name) is result_objects[index]
-        assert mapping[name] is result_objects[index]
-    assert mapping["cycle_result"] is result_objects[0]
-    assert mapping["institutional_confidence_result"] is result_objects[15]
-    assert mapping["ice_result"] is result_objects[15]
-    assert mapping["smart_money_result"] is result_objects[19]
-    assert mapping["smi_result"] is result_objects[19]
-    assert mapping["data_health_result"] is result_objects[21]
+    for name, sentinel in result_objects.items():
+        assert getattr(results, name) is sentinel
+        assert mapping[name] is sentinel
+    assert mapping["ice_result"] is result_objects["institutional_confidence_result"]
+    assert mapping["smi_result"] is result_objects["smart_money_result"]
 
 
 def test_valid_bullish_and_bearish_recommendations_are_not_changed():

@@ -1,4 +1,11 @@
 # Test Report
+
 pytest not executed by Codex — local validation required.
 
-Behavioural tests cover complete/empty/malformed chains, denominators, negative OI changes, optional IV/Greeks/volume/quotes, thin liquidity, deterministic PCR/Max Pain, Greek signs, IV skew, history velocity/acceleration/percentile, neutral malformed data, and preview fields. Pipeline identity and dashboard characterization remain covered by the existing suite and Sprint 9 additions. Run locally: `python -m pytest -q`.
+## Sprint 9 follow-up
+
+- Reworked the `PipelineResults` mapping test to create a unique sentinel per authoritative result field, use keyword construction, include `institutional_metrics`, and retain identity checks for `ice_result` and `smi_result`.
+- Corrected deterministic OI-weighted delta expectations to `26 / 60` and `-26 / 60`.
+- Added explicit OI-versus-volume Greek weighting, sign-preservation, and zero-weight safety coverage.
+
+Run locally: `python -m pytest -q`.

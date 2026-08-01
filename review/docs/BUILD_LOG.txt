@@ -1,9 +1,15 @@
-Sprint 9 validation (UTC 2026-08-01)
+Sprint 9 test correction validation (UTC 2026-08-01)
 
-$ python -m py_compile itos_platform/__init__.py itos_platform/decision_context.py itos_platform/decision_pipeline.py itos_platform/institutional_metrics.py tests/test_institutional_metrics.py review/source/itos_platform/__init__.py review/source/itos_platform/decision_context.py review/source/itos_platform/decision_pipeline.py review/source/itos_platform/institutional_metrics.py review/source/tests/test_institutional_metrics.py
+$ python -m py_compile \
+  itos_platform/decision_pipeline.py \
+  itos_platform/institutional_metrics.py \
+  tests/test_decision_pipeline.py \
+  tests/test_institutional_metrics.py
 
 (exit 0; no output)
 
 $ git diff --check
 
 (exit 0; no output)
+
+pytest: NOT RUN — LOCAL VALIDATION REQUIRED

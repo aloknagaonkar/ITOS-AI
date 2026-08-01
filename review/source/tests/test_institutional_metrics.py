@@ -1,8 +1,10 @@
-from dataclasses import replace
 import pandas as pd
 import pytest
 from itos_platform.decision_context import DecisionContext, MarketSnapshot
-from itos_platform.institutional_metrics import InstitutionalMetricsEngine
+from itos_platform.institutional_metrics import (
+    InstitutionalMetricsEngine,
+    InstitutionalMetricsSettings,
+)
 
 
 def chain():
@@ -26,8 +28,9 @@ def test_complete_chain_deterministic_metrics_and_signs():
     assert result.oi.call_oi==60 and result.oi.put_oi==60
     assert result.pcr.oi_pcr==pytest.approx(1) and result.pcr.volume_pcr==pytest.approx(1)
     assert result.volatility.iv_skew==pytest.approx(4)
-    assert result.greeks.call_delta==pytest.approx(7/15)
-    assert result.greeks.put_delta==pytest.approx(-7/15)
+    # OI weighting: call = 26/60 and put = -26/60.
+    assert result.greeks.call_delta==pytest.approx(26/60)
+    assert result.greeks.put_delta==pytest.approx(-26/60)
     assert result.max_pain==100
     assert result.preview()["dominant_positioning_state"]
 
@@ -61,3 +64,31 @@ def test_thin_liquidity_and_aliases():
     aliased=pd.DataFrame({"strike_price":[100],"ce_oi":[2],"pe_oi":[4],"ce_volume":[1],"pe_volume":[2]})
     result=InstitutionalMetricsEngine().analyze(context(aliased))
     assert result.pcr.oi_pcr==2 and result.liquidity.thin_market
+
+
+def test_greek_weighting_method_preserves_signs_and_zero_weights_are_safe():
+    weighted_chain = chain()
+    weighted_chain["call_volume"] = [30, 20, 10]
+    weighted_chain["put_volume"] = [10, 20, 30]
+
+    oi_result = InstitutionalMetricsEngine(
+        InstitutionalMetricsSettings(greek_weighting="oi")
+    ).analyze(context(weighted_chain))
+    volume_result = InstitutionalMetricsEngine(
+        InstitutionalMetricsSettings(greek_weighting="volume")
+    ).analyze(context(weighted_chain))
+
+    assert oi_result.greeks.call_delta == pytest.approx(26 / 60)
+    assert oi_result.greeks.put_delta == pytest.approx(-26 / 60)
+    assert volume_result.greeks.call_delta == pytest.approx(34 / 60)
+    assert volume_result.greeks.put_delta == pytest.approx(-34 / 60)
+    assert oi_result.greeks.call_delta > 0 > oi_result.greeks.put_delta
+    assert volume_result.greeks.call_delta > 0 > volume_result.greeks.put_delta
+
+    zero_weight_chain = weighted_chain.copy()
+    zero_weight_chain[["call_oi", "put_oi"]] = 0
+    zero_weight_result = InstitutionalMetricsEngine(
+        InstitutionalMetricsSettings(greek_weighting="oi")
+    ).analyze(context(zero_weight_chain))
+    assert zero_weight_result.greeks.call_delta is None
+    assert zero_weight_result.greeks.put_delta is None
