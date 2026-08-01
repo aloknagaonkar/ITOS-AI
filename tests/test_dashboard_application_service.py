@@ -248,8 +248,22 @@ def test_service_preserves_pipeline_outputs_session_keys_and_order(harness):
         "sync_trade_history",
     ):
         assert harness.events.index("build_recommendation") < harness.events.index(write)
-    assert harness.events.index("save_phase_history") < harness.events.index("read_phase_history")
-    assert harness.events.index("save_stability_history") < harness.events.index("read_stability_history")
+    phase_reads = [
+        index
+        for index, event in enumerate(harness.events)
+        if event == "read_phase_history"
+    ]
+    stability_reads = [
+        index
+        for index, event in enumerate(harness.events)
+        if event == "read_stability_history"
+    ]
+    assert len(phase_reads) == 2
+    assert len(stability_reads) == 2
+    assert phase_reads[0] < harness.events.index("RecommendationStabilityEngine")
+    assert stability_reads[0] < harness.events.index("RecommendationStabilityEngine")
+    assert harness.events.index("save_phase_history") < phase_reads[-1]
+    assert harness.events.index("save_stability_history") < stability_reads[-1]
     assert harness.events.index("save_confidence_history") < harness.events.index("sync_trade_history")
 
     assert state["option_result"] is harness.option_result
@@ -275,10 +289,12 @@ def test_service_preserves_pipeline_outputs_session_keys_and_order(harness):
     assert harness.calls["EarlyWarningEngine"]["validation_result"] is result.validation_result
     assert harness.calls["MarketRegimeEngine"]["flow_result"] is result.flow_result
     assert isinstance(harness.calls["DataHealthEngine"], MarketSnapshot)
+    assert harness.calls["MarketCycleEngine"] is harness.calls["DataHealthEngine"]
     assert harness.calls["DataHealthEngine"].option_result is harness.option_result
     assert harness.calls["DataHealthEngine"].historical_candles is state["historical_pattern_candles"]
     assert harness.calls["DataHealthEngine"].selected_instrument == "TEST"
     assert result.market_snapshot is harness.calls["DataHealthEngine"]
+    assert harness.calls["MarketCycleEngine.init"][1]["institutional_compatibility"] is None
     assert harness.calls["AITradeEngine"]["decision_matrix_result"] is result.decision_matrix_result
     assert harness.calls["AITradeEngine"]["trade_plan_result"] is result.trade_plan_result
 
@@ -305,6 +321,7 @@ def test_cached_execution_reuses_analysis_without_acquisition_or_writes(harness)
     assert result.option_result is harness.option_result
     assert result.intelligence is harness.intelligence
     assert result.market_snapshot is harness.calls["DataHealthEngine"]
+    assert result.market_snapshot is harness.calls["MarketCycleEngine"]
     assert (
         result.market_snapshot.historical_candles
         is state["historical_pattern_candles"]

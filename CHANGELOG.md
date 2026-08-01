@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+- Migrated `MarketCycleEngine` to use the canonical typed `MarketSnapshot` input while preserving a legacy dictionary adapter and unchanged cycle decisions.
+- Updated the dashboard application pipeline so market-cycle and data-health analysis share the same snapshot instance.
+
 ## 9.2.1
 - Added weighted institutional confidence analysis.
 - Added smart strike ranking.

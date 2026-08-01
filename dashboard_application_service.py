@@ -130,7 +130,23 @@ class DashboardApplicationService:
                 self.warning(f"Historical flow could not be included in the current recommendation: {exc}")
 
         recommendation = build_recommendation(option_result, intelligence, institutional)
-        cycle_result = MarketCycleEngine().analyze({"option_result": option_result, "intelligence": intelligence, "institutional": institutional})
+        market_snapshot = MarketSnapshot(
+            option_result=option_result,
+            intelligence=intelligence,
+            historical_candles=session_state.get(
+                "historical_pattern_candles", session_state.get("historical_candles")
+            ),
+            timestamps={"last_refresh": session_state.get("last_refresh", "")},
+            selected_instrument=session_state.get("underlying", underlying),
+            expiry=session_state.get("expiry", expiry),
+            timeframe=session_state.get("timeframe", timeframe),
+            data_quality={
+                "recommendation_available": recommendation_is_available(recommendation),
+            },
+        )
+        cycle_result = MarketCycleEngine(
+            institutional_compatibility=institutional
+        ).analyze(market_snapshot)
         engine_store = self.store_factory()
         engine_underlying = session_state.get("underlying", underlying)
         engine_expiry = session_state.get("expiry", expiry)
@@ -220,20 +236,6 @@ class DashboardApplicationService:
         except Exception as exc:
             self.warning(f"Trade history could not be updated: {exc}")
         trade_plan_result = None
-        market_snapshot = MarketSnapshot(
-            option_result=option_result,
-            intelligence=intelligence,
-            historical_candles=session_state.get(
-                "historical_pattern_candles", session_state.get("historical_candles")
-            ),
-            timestamps={"last_refresh": session_state.get("last_refresh", "")},
-            selected_instrument=session_state.get("underlying", underlying),
-            expiry=session_state.get("expiry", expiry),
-            timeframe=session_state.get("timeframe", timeframe),
-            data_quality={
-                "recommendation_available": recommendation_is_available(recommendation)
-            },
-        )
         data_health_result = DataHealthEngine().analyze(market_snapshot)
         ai_trade_opportunity = AITradeEngine().build(recommendation=recommendation, trade_plan_result=trade_plan_result, decision_matrix_result=decision_matrix_result, regime_result=regime_result, flow_result=flow_result, confidence_history=confidence_history)
         names = locals()
