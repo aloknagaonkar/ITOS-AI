@@ -11,3 +11,4 @@
 | `CHANGELOG.md` | Record Sprint 12 | Release documentation | None |
 | `review/docs/*` | Provide rules and review evidence | Review-only | None |
 | `review/source/*` | Preserve modified-source review package | Review-only copies | None |
+| `review/docs/ROADMAP_PROGRESS.md` | Record feature-register progress and deferrals | Review-only roadmap traceability | None |
