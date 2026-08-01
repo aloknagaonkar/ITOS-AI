@@ -415,3 +415,33 @@ def test_incomplete_cached_data_never_builds_or_emits_buy(harness):
 
     assert "build_recommendation" not in harness.events
     assert "AITradeEngine" not in harness.events
+
+
+def test_unavailable_candles_force_safe_wait_and_unhealthy_data(harness, monkeypatch):
+    warnings = []
+    from engines.data_health_engine import DataHealthEngine as RealDataHealthEngine
+
+    monkeypatch.setattr(service_module, "DataHealthEngine", RealDataHealthEngine)
+
+    class EmptyCandleClient(harness.Client):
+        def get_intraday_candles(self, *args, **kwargs):
+            return pd.DataFrame(columns=["timestamp", "open", "high", "low", "close", "volume", "oi"])
+
+    result = DashboardApplicationService(
+        client_factory=EmptyCandleClient,
+        store_factory=harness.Store,
+        warning=warnings.append,
+        clock=lambda: "10:11:12",
+    ).execute(
+        token="token", instrument_key="NSE_INDEX|Nifty 50", underlying="NIFTY",
+        expiry="2026-08-06", timeframe=5, strikes=8, save_snapshots=True,
+        history_hours=8, should_load=True, session_state={},
+    )
+
+    assert result.data_unavailable is True
+    assert result.recommendation["side"] == "WAIT"
+    assert result.recommendation["confirmed"] is False
+    assert result.data_health_result.vote == "BLOCK"
+    assert "CANDLES_UNAVAILABLE" in result.data_health_result.metadata["flags"]
+    assert warnings and "forced to WAIT" in warnings[0]
+    assert "build_recommendation" not in harness.events

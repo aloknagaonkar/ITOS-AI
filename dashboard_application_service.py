@@ -74,6 +74,31 @@ class DashboardApplicationService:
             raw_candles = client.get_intraday_candles(
                 instrument_key, interval=timeframe, unit="minutes"
             )
+            if raw_candles.empty:
+                warning = (
+                    "Market candles are unavailable from both Upstox intraday and "
+                    "historical feeds. Data health is unhealthy and trading is forced to WAIT."
+                )
+                self.warning(warning)
+                market_snapshot = MarketSnapshot(
+                    option_result=option_result, intelligence={},
+                    historical_candles=raw_candles,
+                    timestamps={"last_refresh": self.clock()},
+                    selected_instrument=underlying, expiry=expiry, timeframe=timeframe,
+                    data_quality={"recommendation_available": False},
+                )
+                data_health_result = DataHealthEngine().analyze(market_snapshot)
+                recommendation = {
+                    "side": "WAIT", "confirmed": False,
+                    "status": "WAIT — CANDLE DATA UNAVAILABLE",
+                    "blockers": [warning],
+                }
+                return DashboardApplicationResult({
+                    "data_unavailable": True, "warning": warning,
+                    "market_snapshot": market_snapshot,
+                    "data_health_result": data_health_result,
+                    "recommendation": recommendation,
+                })
             today = date.today()
             history_from = today - timedelta(days=10)
             try:

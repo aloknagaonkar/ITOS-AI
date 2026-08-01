@@ -1,5 +1,5 @@
-# Sprint 7 Summary
+# Resilient Upstox Candle Acquisition
 
-MarketRegimeEngine, SmartMoneyIndexEngine, MarketEnergyEngine, and EarlyWarningEngine now accept `DecisionContext` as their preferred input. Each retains a private legacy adapter and a single business-logic path. Dashboard execution reuses its one `MarketSnapshot` and one `DecisionContext`; result registration makes upstream dependencies available to later engines without placing runtime state in the snapshot.
+Candle acquisition now uses Upstox V3 intraday candles and falls back to a V3 historical range, selecting the latest trading day returned. Instrument keys are canonicalized to one URL-encoding pass, including `NSE_INDEX|Nifty 50`. Responses are normalized to typed DataFrames, and safe structured logs exclude authorization headers and tokens.
 
-Compatibility mapping input remains supported. Optional malformed values normalize to neutral inputs, and a blocked or incomplete recommendation cannot produce an actionable early-warning vote.
+When neither source supplies usable candles, the application returns an explicit unavailable result, Data Health blocks trading, the recommendation is forced to WAIT, and Streamlit displays a clear warning without running candle-dependent calculations. Trading formulas, thresholds, safety gates, and normal engine order are unchanged.
