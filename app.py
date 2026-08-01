@@ -922,23 +922,93 @@ with tab_live:
     stable3.metric("Stability trend", stability_meta.get("trend", "Unknown"))
     stable4.metric("Direction changes", int(stability_meta.get("direction_changes", 0)))
 
+    st.markdown("#### Market Status")
+    status_location = market_location if market_location is not None else None
+    status_volume = volume_structure if volume_structure is not None else None
+    flow_meta = getattr(flow_result, "metadata", {}) or {}
+    status_values = [
+        ("Location", getattr(status_location, "zone", "Unavailable")),
+        ("Location score", f"{status_location.location_score:.1f}" if status_location else "Unavailable"),
+        ("Price", getattr(status_volume, "price_direction", "Unavailable")),
+        ("Volume", getattr(status_volume, "volume_direction", "Unavailable")),
+        ("Confirmation", getattr(status_volume, "volume_confirmation", "Unavailable")),
+        ("Institutional flow", flow_meta.get("direction", flow_meta.get("flow", "Unavailable"))),
+        ("Interpretation", getattr(status_volume, "interpretation", "Unavailable")),
+        ("Confidence", f"{status_volume.confidence:.0f}%" if status_volume else "Unavailable"),
+    ]
+    for column, (label, value) in zip(st.columns(8), status_values):
+        column.metric(label, str(value).replace("_", " ").title())
+
     with st.expander("Market Location & Transition", expanded=False):
-        location_columns = st.columns(5)
-        location_columns[0].metric("Zone", market_location.zone)
-        location_columns[1].metric("Location score", f"{market_location.location_score:.1f}/100")
-        location_columns[2].metric("Transition", market_location.transition)
-        location_columns[3].metric("Direction", market_location.direction)
-        location_columns[4].metric("Confidence", f"{market_location.confidence:.0f}%")
-        st.write(
-            f"Support: {market_location.support_level if market_location.support_level is not None else '—'} • "
-            f"Resistance: {market_location.resistance_level if market_location.resistance_level is not None else '—'} • "
-            f"Distance to support: {market_location.distance_to_support if market_location.distance_to_support is not None else '—'} • "
-            f"Distance to resistance: {market_location.distance_to_resistance if market_location.distance_to_resistance is not None else '—'}"
-        )
-        if market_location.quality_flags:
-            st.caption("Quality flags: " + ", ".join(market_location.quality_flags))
-        for explanation in market_location.explanations:
-            st.write(f"• {explanation}")
+        if market_location is None:
+            st.info("Market location data is unavailable.")
+        else:
+            location_columns = st.columns(5)
+            location_columns[0].metric("Zone", market_location.zone)
+            location_columns[1].metric("Location score", f"{market_location.location_score:.1f}/100")
+            location_columns[2].metric("Transition", market_location.transition)
+            location_columns[3].metric("Direction", market_location.direction)
+            location_columns[4].metric("Confidence", f"{market_location.confidence:.0f}%")
+            st.write(
+                f"Support: {market_location.support_level if market_location.support_level is not None else '—'} • "
+                f"Resistance: {market_location.resistance_level if market_location.resistance_level is not None else '—'} • "
+                f"Distance to support: {market_location.distance_to_support if market_location.distance_to_support is not None else '—'} • "
+                f"Distance to resistance: {market_location.distance_to_resistance if market_location.distance_to_resistance is not None else '—'}"
+            )
+            if market_location.quality_flags:
+                st.caption("Quality flags: " + ", ".join(market_location.quality_flags))
+            for explanation in market_location.explanations:
+                st.write(f"• {explanation}")
+
+    with st.expander("Price & Volume Behaviour", expanded=False):
+        if volume_structure is None:
+            st.info("Price and volume behaviour is unavailable.")
+        else:
+            def display_value(value, suffix=""):
+                return "Unavailable" if value is None else f"{value}{suffix}"
+            st.markdown("**Measured facts**")
+            facts = {
+                "Market Location": getattr(market_location, "zone", "Unavailable"),
+                "Price Direction": volume_structure.price_direction,
+                "Price Strength": display_value(volume_structure.price_strength, "/100"),
+                "Price Change Percent": display_value(volume_structure.price_change_percent, "%"),
+                "Price Slope": display_value(volume_structure.price_slope),
+                "Volume Direction": volume_structure.volume_direction,
+                "Volume Strength": display_value(volume_structure.volume_strength, "/100"),
+                "Volume Change Percent": display_value(volume_structure.volume_change_percent, "%"),
+                "Relative Volume": display_value(volume_structure.relative_volume, "x"),
+                "Volume Confirmation": volume_structure.volume_confirmation,
+                "Effort vs Result": volume_structure.effort_result_state,
+            }
+            st.table(pd.DataFrame(facts.items(), columns=["Measure", "Value"]))
+            st.markdown("**Location-aware interpretation**")
+            interpreted = {
+                "Interpretation": volume_structure.interpretation,
+                "Direction": volume_structure.direction,
+                "Accumulation Score": volume_structure.accumulation_score,
+                "Distribution Score": volume_structure.distribution_score,
+                "Absorption Score": volume_structure.absorption_score,
+                "Exhaustion Score": volume_structure.exhaustion_score,
+                "Confidence": f"{volume_structure.confidence:.0f}%",
+                "Quality Flags": ", ".join(volume_structure.quality_flags) or "None",
+            }
+            st.table(pd.DataFrame(interpreted.items(), columns=["Interpretation", "Value"]))
+            for explanation in volume_structure.explanations:
+                st.write(f"• {explanation}")
+
+    with st.expander("Institutional Metrics v2 Preview", expanded=False):
+        if institutional_metrics is None:
+            st.info("Institutional metrics are unavailable.")
+        else:
+            metric_values = {
+                name.replace("_", " ").title(): value
+                for name, value in vars(institutional_metrics).items()
+                if name not in {"explanations", "quality_flags"}
+            }
+            st.table(pd.DataFrame(metric_values.items(), columns=["Metric", "Value"]))
+            quality_flags = getattr(institutional_metrics, "quality_flags", ())
+            if quality_flags:
+                st.caption("Quality flags: " + ", ".join(quality_flags))
     
     phase_probabilities = cycle_meta.get("probabilities", {})
     if phase_probabilities:
