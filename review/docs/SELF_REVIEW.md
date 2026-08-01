@@ -1,7 +1,8 @@
 # Self Review
 
-- Confirmed no thresholds, weights, votes, explanations, decision-matrix rows, or safety policies were edited.
-- Confirmed the pipeline preserves engine order and exposes the metrics object in both context and results.
-- Confirmed all four private adapters forward a supplied metrics object without copying or reconstructing it.
-- Confirmed missing typed values retain legacy raw fallback or neutral degradation.
-- Confirmed no dashboard layout, acquisition, persistence, or repository code was changed.
+- Confirmed the new model is frozen and pipeline-computed once.
+- Confirmed the engine has no repository, Streamlit, persistence, or recommendation dependency.
+- Confirmed thresholds and lookbacks are centralized in settings and can be overridden through context configuration.
+- Confirmed malformed inputs degrade to UNKNOWN and do not create trade advice.
+- Confirmed no SafetyGatePolicy, confidence formula, strike, order, target, or recommendation formula was modified.
+- Pytest was intentionally not executed per sprint instructions.

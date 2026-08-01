@@ -1,6 +1,7 @@
 # Known Issues
 
-- Full pytest validation was intentionally not executed in the Codex environment.
-- OI velocity and acceleration require valid, ordered history; missing history retains the existing warming-up/safe-degradation behavior.
-- Granular gamma-wall and timeline displays still require strike history because aggregate metrics cannot reproduce strike-level rows.
-- Metric quality is observational at these engine boundaries; existing safety gates remain authoritative.
+- Swing fallback uses deterministic interior extrema, not a pivot-strength or session-aware swing algorithm.
+- Transition history is inferred from candles in the configured window; it is not persisted.
+- `CONFLICTING_STRUCTURE` is reserved for a future normalized structure contract and is not emitted from today's heterogeneous metadata.
+- Staleness is assessed only when a parseable candle/captured timestamp is available.
+- Volume is intentionally not interpreted in Sprint 11.

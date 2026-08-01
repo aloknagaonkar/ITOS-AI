@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from .institutional_metrics import InstitutionalMetrics
+    from .market_location import MarketLocation
 
 
 def recommendation_is_available(recommendation: Any) -> bool:
@@ -98,6 +99,7 @@ class DecisionContext:
     confirmation_result: Any = None
     stability_result: Any = None
     false_breakout_result: Any = None
+    market_location: MarketLocation | None = None
 
     def __post_init__(self) -> None:
         """Reconcile canonical fields with Sprint 2 constructor aliases."""
@@ -116,6 +118,7 @@ class DecisionContext:
             "confirmation_result": "institutional_confirmation",
             "stability_result": "recommendation_stability",
             "false_breakout_result": "false_breakout",
+            "market_location": "market_location",
         }
         for field_name, result_name in result_fields.items():
             value = getattr(self, field_name)
