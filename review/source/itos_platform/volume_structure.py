@@ -91,7 +91,13 @@ class VolumeStructureEngine:
         if any(name not in candles for name in required):
             return self._unknown(("OHLC_INVALID",))
         numeric = candles[list(required)].apply(pd.to_numeric, errors="coerce")
-        if numeric.isna().any().any() or (numeric.high < numeric.low).any():
+        if (
+            numeric.isna().any().any()
+            or (numeric.high < numeric.low).any()
+            or (numeric.high < numeric[["open", "close"]].max(axis=1)).any()
+            or (numeric.low > numeric[["open", "close"]].min(axis=1)).any()
+            or (numeric[["open", "high", "low", "close"]] <= 0).any().any()
+        ):
             return self._unknown(("OHLC_INVALID",))
         if len(candles) < settings.minimum_candles:
             return self._unknown(("CANDLES_INSUFFICIENT",))
@@ -134,9 +140,20 @@ class VolumeStructureEngine:
         vf = settings.volume_flat_threshold
         volume_direction = "RISING" if volume_ratio_change > vf or relative > 1+vf else "FALLING" if volume_ratio_change < -vf and relative < 1+vf else "FLAT"
         volume_strength = self._clamp(max(abs(volume_ratio_change), abs(relative-1))*100)
-        if volume_direction == "RISING" and price_direction in {"RISING", "FALLING"}:
+        confirmation_ready = (
+            volume_strength >= settings.confirmation_threshold * 100.0
+        )
+        if (
+            confirmation_ready
+            and volume_direction == "RISING"
+            and price_direction in {"RISING", "FALLING"}
+        ):
             confirmation = "CONFIRMED"
-        elif volume_direction == "FALLING" and price_direction in {"RISING", "FALLING"}:
+        elif (
+            confirmation_ready
+            and volume_direction == "FALLING"
+            and price_direction in {"RISING", "FALLING"}
+        ):
             confirmation = "DIVERGING"
         else:
             confirmation = "NEUTRAL"
@@ -154,16 +171,27 @@ class VolumeStructureEngine:
             effort = "BALANCED"
         interpretation, direction = self._interpret(location.zone, location.transition, price_direction, volume_direction, effort)
         absorption = self._clamp((relative/settings.absorption_minimum_volume)*60 + max(0, settings.absorption_maximum_price_result-result)*80) if effort == "ABSORPTION" else 0.0
-        exhaustion = self._clamp((1-min(relative, 1))*60 + (40 if effort == "EXHAUSTION" else 0))
+        exhaustion_window = candles.tail(settings.exhaustion_lookback)
+        spreads = exhaustion_window.high - exhaustion_window.low
+        shrinking_spreads = (
+            len(spreads) > 1 and float(spreads.iloc[-1]) < float(spreads.iloc[0])
+        )
+        exhaustion = self._clamp(
+            (1-min(relative, 1))*50
+            + (35 if effort == "EXHAUSTION" else 0)
+            + (15 if shrinking_spreads and price_direction != "FLAT" else 0)
+        )
         low_location = location.zone in {"BOTTOM", "LOWER_RANGE"}
         high_location = location.zone in {"TOP", "UPPER_RANGE"}
         accumulation = self._clamp((settings.accumulation_location_weight if low_location else 0) + (settings.accumulation_participation_weight if price_direction == volume_direction == "RISING" else 0) + absorption*settings.accumulation_absorption_weight/100)
         distribution = self._clamp((settings.distribution_location_weight if high_location else 0) + (settings.distribution_participation_weight if price_direction == "FALLING" and volume_direction == "RISING" else 0) + absorption*settings.distribution_absorption_weight/100)
+        if confirmation == "NEUTRAL" and price_direction != "FLAT":
+            flags.append("EFFORT_RESULT_UNCONFIRMED")
         if location.transition in {"FAILED_BREAKOUT", "FAILED_BREAKDOWN"}:
             flags.append("CONFLICTING_STRUCTURE")
         self._stale(candles, context, settings, flags)
         confidence = self._clamp(85 - len(flags)*12 - (25 if location.transition in {"FAILED_BREAKOUT", "FAILED_BREAKDOWN"} else 0))
-        return VolumeStructure(price_direction, round(price_strength, 4), round(change, 6), round(slope, 6), volume_direction, round(volume_strength, 4), round(volume_change, 6), round(relative, 6), confirmation, effort, interpretation, direction, round(accumulation, 4), round(distribution, 4), round(absorption, 4), round(exhaustion, 4), confidence, tuple(flags), (f"Price is {price_direction.lower()} across {len(recent)} closes ({change:.2f}%).", f"Recent volume is {relative:.2f}x its baseline and {volume_direction.lower()}.", f"At {location.zone}, effort versus result is {effort}; interpretation is informational only."))
+        return VolumeStructure(price_direction, round(price_strength, 4), round(change, 6), round(slope, 6), volume_direction, round(volume_strength, 4), round(volume_change, 6), round(relative, 6), confirmation, effort, interpretation, direction, round(accumulation, 4), round(distribution, 4), round(absorption, 4), round(exhaustion, 4), confidence, tuple(dict.fromkeys(flags)), (f"Price is {price_direction.lower()} across {len(recent)} closes ({change:.2f}%).", f"Recent volume is {relative:.2f}x its baseline and {volume_direction.lower()}.", f"At {location.zone}, effort versus result is {effort}; interpretation is informational only."))
 
     @staticmethod
     def _interpret(zone: str, transition: str, price: str, volume: str, effort: str) -> tuple[str, str]:

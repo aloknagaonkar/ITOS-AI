@@ -85,3 +85,4 @@
 - Added immutable, configuration-driven price-volume facts and location-aware interpretations with safe degradation.
 - Reused one informational `VolumeStructure` through the decision context, pipeline results, compatibility mapping, and dashboard.
 - Added Market Status and Price & Volume Behaviour displays without changing recommendation, confidence, safety, planning, or execution logic.
+- Hardened Sprint 12 OHLC envelope validation, configurable confirmation evidence, exhaustion-window scoring, and unavailable dashboard presentation.

@@ -961,30 +961,38 @@ with tab_live:
                 st.write(f"• {explanation}")
 
     with st.expander("Price & Volume Behaviour", expanded=False):
-        if volume_structure is None:
+        if (
+            volume_structure is None
+            or getattr(volume_structure, "volume_confirmation", "UNAVAILABLE")
+            == "UNAVAILABLE"
+        ):
             st.info("Price and volume behaviour is unavailable.")
         else:
             def display_value(value, suffix=""):
                 return "Unavailable" if value is None else f"{value}{suffix}"
+            def display_state(value):
+                if value in (None, "UNKNOWN", "UNAVAILABLE"):
+                    return "Unavailable"
+                return str(value).replace("_", " ").title()
             st.markdown("**Measured facts**")
             facts = {
-                "Market Location": getattr(market_location, "zone", "Unavailable"),
-                "Price Direction": volume_structure.price_direction,
+                "Market Location": display_state(getattr(market_location, "zone", None)),
+                "Price Direction": display_state(volume_structure.price_direction),
                 "Price Strength": display_value(volume_structure.price_strength, "/100"),
                 "Price Change Percent": display_value(volume_structure.price_change_percent, "%"),
                 "Price Slope": display_value(volume_structure.price_slope),
-                "Volume Direction": volume_structure.volume_direction,
+                "Volume Direction": display_state(volume_structure.volume_direction),
                 "Volume Strength": display_value(volume_structure.volume_strength, "/100"),
                 "Volume Change Percent": display_value(volume_structure.volume_change_percent, "%"),
                 "Relative Volume": display_value(volume_structure.relative_volume, "x"),
-                "Volume Confirmation": volume_structure.volume_confirmation,
-                "Effort vs Result": volume_structure.effort_result_state,
+                "Volume Confirmation": display_state(volume_structure.volume_confirmation),
+                "Effort vs Result": display_state(volume_structure.effort_result_state),
             }
             st.table(pd.DataFrame(facts.items(), columns=["Measure", "Value"]))
             st.markdown("**Location-aware interpretation**")
             interpreted = {
-                "Interpretation": volume_structure.interpretation,
-                "Direction": volume_structure.direction,
+                "Interpretation": display_state(volume_structure.interpretation),
+                "Direction": display_state(volume_structure.direction),
                 "Accumulation Score": volume_structure.accumulation_score,
                 "Distribution Score": volume_structure.distribution_score,
                 "Absorption Score": volume_structure.absorption_score,
