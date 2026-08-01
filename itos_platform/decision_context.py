@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from collections.abc import Mapping
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from .institutional_metrics import InstitutionalMetrics
 
 
 def recommendation_is_available(recommendation: Any) -> bool:
@@ -85,7 +88,7 @@ class DecisionContext:
     session_state: Mapping[str, Any] = field(default_factory=dict)
     runtime_settings: Mapping[str, Any] = field(default_factory=dict)
     institutional: Mapping[str, Any] | None = None
-    institutional_metrics: Any = None
+    institutional_metrics: InstitutionalMetrics | None = None
     decision_history: Any = None
     strike_history: Any = None
     stability_history: Any = None
