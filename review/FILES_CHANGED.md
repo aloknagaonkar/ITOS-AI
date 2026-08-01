@@ -1,15 +1,13 @@
 # Files Changed
 
-## Files Added
-None.
+## Added
+- `tests/test_phase_transition_engine.py`
 
-## Files Modified
+## Modified
 - `CHANGELOG.md`
 - `dashboard_application_service.py`
-- `engines/stability_engine.py`
-- `itos_platform/decision_context.py`
+- `engines/institutional_intelligence.py`
 - `tests/test_dashboard_application_service.py`
-- `tests/test_stability_typed_context.py`
 - `review/SPRINT_SUMMARY.md`
 - `review/TEST_REPORT.md`
 - `review/BUILD_LOG.txt`
@@ -17,5 +15,5 @@ None.
 - `review/ARCHITECTURE_NOTES.md`
 - `review/KNOWN_ISSUES.md`
 
-## Files Deleted
-None.
+## Deleted
+- None.
