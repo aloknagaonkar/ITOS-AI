@@ -25,7 +25,7 @@ from engines import (
     SmartMoneyIndexEngine, MarketEnergyEngine, DataHealthEngine,
 )
 from engines.ai_trade_engine import AITradeEngine
-from itos_platform import MarketSnapshot, recommendation_is_available
+from itos_platform import DecisionContext, MarketSnapshot, recommendation_is_available
 
 
 class DashboardDataUnavailable(RuntimeError):
@@ -155,10 +155,13 @@ class DashboardApplicationService:
         decision_context = DecisionContext(
             market_snapshot=market_snapshot,
             recommendation=recommendation,
-            cycle_result=cycle_result,
+            engine_results={"market_cycle": cycle_result},
             confidence_history=prior_confidence_history,
             phase_history=prior_phase_history,
-            runtime={"minimum_stability": 70.0, "history_hours": history_hours},
+            runtime_configuration={
+                "minimum_stability": 70.0,
+                "history_hours": history_hours,
+            },
         )
         stability_result = RecommendationStabilityEngine(minimum_stability=70.0).analyze(decision_context)
         transition_result = PhaseTransitionEngine().analyze({"cycle_result": cycle_result})
@@ -244,7 +247,7 @@ class DashboardApplicationService:
         data_health_result = DataHealthEngine().analyze(market_snapshot)
         ai_trade_opportunity = AITradeEngine().build(recommendation=recommendation, trade_plan_result=trade_plan_result, decision_matrix_result=decision_matrix_result, regime_result=regime_result, flow_result=flow_result, confidence_history=confidence_history)
         names = locals()
-        consumed = "market_snapshot option_result intelligence institutional decision_history decision_strike_history recommendation cycle_result cycle_meta stability_result stability_meta transition_result pattern_result readiness_result radar_result story_result candle_dna_result smart_candle_result structure_result footprint_result false_breakout_result confirmation_result decision_matrix_result flow_result ice_result validation_result early_warning_result regime_result smi_result energy_result phase_history stability_history confidence_history trade_history trade_stats trade_plan_result data_health_result ai_trade_opportunity".split()
+        consumed = "market_snapshot decision_context option_result intelligence institutional decision_history decision_strike_history recommendation cycle_result cycle_meta stability_result stability_meta transition_result pattern_result readiness_result radar_result story_result candle_dna_result smart_candle_result structure_result footprint_result false_breakout_result confirmation_result decision_matrix_result flow_result ice_result validation_result early_warning_result regime_result smi_result energy_result phase_history stability_history confidence_history trade_history trade_stats trade_plan_result data_health_result ai_trade_opportunity".split()
         return DashboardApplicationResult({name: names[name] for name in consumed})
 
     @staticmethod

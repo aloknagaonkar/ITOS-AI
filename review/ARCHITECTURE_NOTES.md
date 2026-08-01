@@ -1,26 +1,27 @@
 # Architecture Notes
 
-## Architectural Decisions
-`MarketSnapshot` is frozen and restricted to option results, intelligence, institutional point-in-time inputs, and the capture/refresh marker. Recommendation state, engine results, histories, and repositories are deliberately excluded. `DecisionContext` owns decision-stage inputs and references (rather than copies) the canonical snapshot.
+## Contract Boundary
+`MarketSnapshot` remains frozen and market-only: option data, intelligence,
+candles, timestamps, instrument selection, and data-quality facts. It does not
+contain recommendations, engine results, or historical result DataFrames.
 
-Dashboard execution constructs the snapshot after recommendation creation but before the market-cycle call, then passes that exact instance to market-cycle and data-health engines. After history reads and cycle analysis it constructs one context and passes that exact instance to recommendation stability.
+`DecisionContext` references the canonical snapshot and explicitly owns the current
+recommendation, named engine results, confidence history, phase history, and runtime
+configuration. Existing repository/configuration/session fields remain for backward
+compatibility; histories are not hidden in repository containers.
 
-## Compatibility Adapter Introduced
-`DecisionContext.from_legacy` converts existing mapping inputs to the typed contract. `RecommendationStabilityEngine.analyze` performs only type dispatch; both paths execute the same calculation body.
+## Compatibility Adapter
+`RecommendationStabilityEngine._adapt_input` is the one conversion boundary for
+legacy mappings. Typed and legacy calls then execute the same stability algorithm.
+Unknown legacy settings are retained as runtime configuration.
 
-## Why It Exists
-External and older internal callers can continue passing dictionaries while typed orchestration becomes the preferred API, avoiding a flag-day migration and avoiding duplicated business logic.
+## Dashboard Identity
+Dashboard execution creates one `MarketSnapshot`, passes it by identity to
+`MarketCycleEngine` and `DataHealthEngine`, creates one `DecisionContext`, and passes
+that context to `RecommendationStabilityEngine`. The context points to the exact
+same snapshot and names the cycle result as `engine_results["market_cycle"]`.
 
-## Temporary Technical Debt
-- Most remaining engines retain mapping-oriented annotations and access patterns.
-- `MarketSnapshot.get` provides a narrow mapping-like bridge for those engines.
-- Data-health recommendation availability is constructor-injected because recommendation state cannot be stored in `MarketSnapshot`.
-
-## Planned Cleanup
-Migrate downstream engines to explicit typed inputs, inventory external legacy callers, deprecate mapping input, and eventually remove mapping compatibility after a communicated transition period.
-
-## Risks
-Callers may rely on undocumented dictionary keys. The adapter preserves unknown legacy keys in `DecisionContext.runtime`, but explicit contract fields should be added only when an engine truly requires them.
-
-## Future Migration Recommendations
-Keep snapshots immutable and market-only, keep repositories in the application layer, add contract parity tests for each migrated engine, and retain object-identity characterization tests in orchestration.
+## Deferred Work
+Other engines remain mapping-oriented and can migrate incrementally. The legacy
+stability adapter should be removed only after external mapping callers have been
+inventoried and deprecated.

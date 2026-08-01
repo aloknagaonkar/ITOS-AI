@@ -1,19 +1,16 @@
 # Known Issues
 
-## Unresolved Test Issues
-`python -m pytest -q` stops during collection because `pandas` is unavailable. There are no observed assertion failures because tests cannot execute.
+## Merge-gate Blocker
+`python -m pytest -q` was invoked but stops during collection because `pandas` and
+`numpy` are unavailable. Five collection errors occur and no tests execute, so the
+required pytest merge gate is not satisfied in this container.
 
 ## Environment Limitations
-The Python 3.14.4 environment does not contain the dependencies from `requirements.txt`. Package installation is blocked by a package-index tunnel returning HTTP 403.
+The Python 3.14.4 environment lacks project dependencies. Both pip installation
+and an apt repository attempt were blocked by the environment's HTTP 403 proxy.
+A dependency-provisioned CI runner must execute the required pytest command.
 
-## Dependency Limitations
-`pandas` and, transitively for the engine suite, `numpy` must be installed before the merge-gate test can run. CI or a provisioned development environment should execute the exact validation commands.
-
-## Compatibility Adapters
-`DecisionContext.from_legacy` and mapping-style `get` access on the typed contracts are intentionally temporary migration aids.
-
-## Follow-up Work
-Run the full suite in the dependency-provisioned CI environment and confirm zero collection errors and zero failures.
-
-## Deferred Improvements
-Migration of other engine interfaces and eventual removal of compatibility accessors are deferred to later sprints.
+## Compatibility Debt
+Legacy mapping input through `RecommendationStabilityEngine._adapt_input` is
+intentional temporary migration support. Most remaining engines still accept
+mapping-shaped inputs and are deferred to later incremental sprints.

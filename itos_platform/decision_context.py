@@ -73,7 +73,31 @@ class DecisionContext:
     """Runtime dependencies and state accompanying a market snapshot."""
 
     market_snapshot: MarketSnapshot
+    recommendation: Mapping[str, Any] = field(default_factory=dict)
+    engine_results: Mapping[str, Any] = field(default_factory=dict)
+    cycle_result: Any = None
+    confidence_history: Any = None
+    phase_history: Any = None
+    runtime_configuration: Mapping[str, Any] = field(default_factory=dict)
+    runtime: Mapping[str, Any] = field(default_factory=dict)
     historical_repositories: Mapping[str, Any] = field(default_factory=dict)
     configuration: Mapping[str, Any] = field(default_factory=dict)
     session_state: Mapping[str, Any] = field(default_factory=dict)
     runtime_settings: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        """Reconcile canonical fields with Sprint 2 constructor aliases."""
+
+        engine_results = dict(self.engine_results or {})
+        cycle_result = self.cycle_result
+        if cycle_result is None:
+            cycle_result = engine_results.get("market_cycle")
+        elif "market_cycle" not in engine_results:
+            engine_results["market_cycle"] = cycle_result
+
+        runtime_configuration = dict(self.runtime or {})
+        runtime_configuration.update(self.runtime_configuration or {})
+        object.__setattr__(self, "engine_results", engine_results)
+        object.__setattr__(self, "cycle_result", cycle_result)
+        object.__setattr__(self, "runtime_configuration", runtime_configuration)
+        object.__setattr__(self, "runtime", runtime_configuration)

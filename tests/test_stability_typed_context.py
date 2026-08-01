@@ -11,10 +11,10 @@ def _context(legacy):
     return DecisionContext(
         market_snapshot=MarketSnapshot(option_result={}, intelligence={}),
         recommendation=legacy.get("recommendation", {}),
-        cycle_result=legacy.get("cycle_result"),
+        engine_results={"market_cycle": legacy.get("cycle_result")},
         confidence_history=legacy.get("confidence_history"),
         phase_history=legacy.get("phase_history"),
-        runtime={"minimum_stability": 70.0},
+        runtime_configuration={"minimum_stability": 70.0},
     )
 
 
@@ -24,7 +24,13 @@ def _assert_identical(left, right):
     assert left.confidence == right.confidence
     assert left.explanation == right.explanation
     assert left.metadata == right.metadata
-    for key in ("stability_score", "label", "direction_changes", "passed"):
+    for key in (
+        "stability_score",
+        "label",
+        "trend",
+        "direction_changes",
+        "passed",
+    ):
         assert left.metadata[key] == right.metadata[key]
 
 
@@ -60,3 +66,36 @@ def test_cached_context_reuse_is_deterministic_and_does_not_rebuild_snapshot():
     second = engine.analyze(context)
     _assert_identical(first, second)
     assert context.market_snapshot is context.market_snapshot
+
+
+def test_stable_pe_recommendations_have_legacy_and_context_parity():
+    legacy = {
+        "recommendation": {"side": "PE", "confidence": 82},
+        "confidence_history": pd.DataFrame(
+            {
+                "side": ["PE"] * 5,
+                "calibrated_confidence": [80, 81, 82, 83, 82],
+            }
+        ),
+        "phase_history": pd.DataFrame({"phase": ["Expansion"] * 4}),
+        "cycle_result": SimpleNamespace(metadata={}),
+    }
+
+    engine = RecommendationStabilityEngine()
+    _assert_identical(engine.analyze(legacy), engine.analyze(_context(legacy)))
+
+
+def test_configured_minimum_threshold_has_legacy_and_context_parity():
+    legacy = {
+        "recommendation": {"side": "CE", "confidence": 75},
+        "confidence_history": pd.DataFrame(),
+        "phase_history": pd.DataFrame(),
+    }
+    engine = RecommendationStabilityEngine(minimum_stability=40)
+    legacy_result = engine.analyze(legacy)
+    context_result = engine.analyze(_context(legacy))
+
+    _assert_identical(legacy_result, context_result)
+    assert legacy_result.metadata["minimum_required"] == 40
+    assert legacy_result.metadata["passed"] is True
+    assert legacy_result.vote == "CE"
