@@ -1,6 +1,9 @@
 """ITOS enterprise platform contracts and shared runtime models."""
 
 from .contracts import DataProvider, MarketDataEnvelope, ProviderHealth
+from .institutional_metrics import (
+    InstitutionalMetrics, InstitutionalMetricsEngine, InstitutionalMetricsSettings,
+)
 from .decision_context import (
     DecisionContext,
     MarketSnapshot,
@@ -9,6 +12,9 @@ from .decision_context import (
 __all__ = [
     "DataProvider",
     "DecisionContext",
+    "InstitutionalMetrics",
+    "InstitutionalMetricsEngine",
+    "InstitutionalMetricsSettings",
     "MarketDataEnvelope",
     "MarketSnapshot",
     "ProviderHealth",

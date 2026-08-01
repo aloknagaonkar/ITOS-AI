@@ -1,5 +1,11 @@
 # Changelog
 
+## Sprint 9 - Institutional Metrics v2 Foundation
+
+- Added immutable institutional metrics contracts, centralized option-chain normalization, and decision-neutral calculations for OI, PCR, Max Pain, volatility, Greeks, liquidity, and positioning.
+- Integrated one shared metrics instance into DecisionContext, PipelineResults, and dashboard application results without changing recommendations or safety behavior.
+- Added behavioural fixtures and the Sprint 9 review package; pytest remains reserved for local validation.
+
 ## Sprint 8 - Decision Pipeline & Safety Gate Foundation
 
 - Introduced a repository-free `DecisionPipeline` that preserves the characterized engine order and shared `DecisionContext`.

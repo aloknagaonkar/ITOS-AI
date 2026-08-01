@@ -1,12 +1,11 @@
-# Sprint 8 Test Report
+# Test Report
 
-## Codex validation
+pytest not executed by Codex — local validation required.
 
-- The required `python -m py_compile` syntax validation was executed for all Python files modified by the state-propagation correction.
-- `git diff --check` was executed as the required patch whitespace validation.
-- **pytest not executed by Codex.**
-- **Full local validation is required before merge:** `python -m pytest -q`.
+## Sprint 9 follow-up
 
-## Behavioural coverage added or retained
+- Reworked the `PipelineResults` mapping test to create a unique sentinel per authoritative result field, use keyword construction, include `institutional_metrics`, and retain identity checks for `ice_result` and `smi_result`.
+- Corrected deterministic OI-weighted delta expectations to `26 / 60` and `-26 / 60`.
+- Added explicit OI-versus-volume Greek weighting, sign-preservation, and zero-weight safety coverage.
 
-The application-service characterization now verifies that every context-aware engine receives a distinct immutable `DecisionContext`, that every such context retains the canonical `MarketSnapshot`, and that its `engine_results` contains the expected results from all earlier stages. It specifically verifies that Recommendation Stability receives the completed Market Cycle result and that the final context contains all named outputs. Existing coverage continues to characterize engine order, result wiring, cached execution, safety vetoes, failure propagation, dashboard compatibility, typed aliases, and fresh-process import boundaries. The full local suite remains the acceptance gate.
+Run locally: `python -m pytest -q`.
