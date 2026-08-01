@@ -1,0 +1,19 @@
+Sprint 5 build log
+==================
+
+Targeted pytest command:
+python -m pytest tests/test_structure_intelligence_context.py tests/test_dashboard_application_service.py -q
+
+Complete blocking error:
+ERROR collecting tests/test_structure_intelligence_context.py
+ImportError while importing test module '/workspace/ITOS-AI/tests/test_structure_intelligence_context.py'.
+ModuleNotFoundError: No module named 'pandas'
+
+ERROR collecting tests/test_dashboard_application_service.py
+ImportError while importing test module '/workspace/ITOS-AI/tests/test_dashboard_application_service.py'.
+ModuleNotFoundError: No module named 'pandas'
+
+!!!!!!!!!!!!!!!!!!! Interrupted: 2 errors during collection !!!!!!!!!!!!!!!!!!!!
+2 errors in 0.33s
+
+No tests executed. No installation retry was attempted.
