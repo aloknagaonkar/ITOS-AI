@@ -41,6 +41,17 @@ def analyze(**kwargs):
     return PositioningIntelligenceEngine().analyze(context(**kwargs))
 
 
+def _without_context_result(ctx, field_name, result_key):
+    """Remove a reconciled dependency from both DecisionContext representations."""
+    engine_results = dict(ctx.engine_results)
+    engine_results.pop(result_key, None)
+    return replace(
+        ctx,
+        engine_results=engine_results,
+        **{field_name: None},
+    )
+
+
 @pytest.mark.parametrize("price,oi,state", [(1, 2, "LONG_BUILDUP"), (-1, 2, "SHORT_BUILDUP"), (1, -2, "SHORT_COVERING"), (-1, -2, "LONG_UNWINDING")])
 def test_futures_matrix(price, oi, state):
     assert analyze(price=price, oi=oi).futures.state == state
@@ -135,10 +146,18 @@ def test_missing_institutional_metrics_is_unavailable():
     assert analyze(metrics=False).options.state == "UNAVAILABLE"
 
 
-@pytest.mark.parametrize("missing,flag", [("volume", "VOLUME_STRUCTURE_UNAVAILABLE"), ("location", "MARKET_LOCATION_UNAVAILABLE")])
-def test_missing_context_inputs_are_quality_flagged(missing, flag):
+@pytest.mark.parametrize(
+    "field_name,result_key,flag",
+    [
+        ("volume_structure", "volume_structure", "VOLUME_STRUCTURE_UNAVAILABLE"),
+        ("market_location", "market_location", "MARKET_LOCATION_UNAVAILABLE"),
+    ],
+)
+def test_missing_context_inputs_are_quality_flagged(field_name, result_key, flag):
     ctx = context()
-    ctx = replace(ctx, **({"volume_structure": None} if missing == "volume" else {"market_location": None}))
+    ctx = _without_context_result(ctx, field_name, result_key)
+
+    assert getattr(ctx, field_name) is None
     assert flag in PositioningIntelligenceEngine().analyze(ctx).quality_flags
 
 

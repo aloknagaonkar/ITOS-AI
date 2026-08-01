@@ -12,3 +12,8 @@
 
 ## Deleted
 None.
+
+## Follow-up test correction
+- Updated `tests/test_positioning_intelligence.py` to construct genuinely missing context dependencies.
+- Updated `tests/test_decision_context.py` with reconciliation-presence and genuine-absence contracts.
+- Refreshed both path-preserving copies under `review/source/tests/`.

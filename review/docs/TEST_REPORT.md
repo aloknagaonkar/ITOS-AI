@@ -8,3 +8,7 @@ Local validation commands:
 
 - `python -m pytest -q`
 - `streamlit run app.py`
+
+## Follow-up correction
+
+The two missing-context behavioural cases now remove each dependency from both its named `DecisionContext` field and `engine_results` before analysis, and assert the dependency is genuinely absent. A separate DecisionContext contract test proves restoration occurs when the mapping contains a value and absence is preserved when both representations omit it.

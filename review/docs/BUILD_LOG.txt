@@ -17,3 +17,21 @@ COMPLETE OUTPUT
 
 EXIT STATUS
 0
+
+FOLLOW-UP COMMAND
+python -m py_compile tests/test_positioning_intelligence.py tests/test_decision_context.py
+
+COMPLETE OUTPUT
+(no output)
+
+EXIT STATUS
+0
+
+FOLLOW-UP COMMAND
+git diff --check
+
+COMPLETE OUTPUT
+(no output)
+
+EXIT STATUS
+0
