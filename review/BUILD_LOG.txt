@@ -1,0 +1,103 @@
+$ python -m py_compile dashboard_application_service.py engines/institutional_intelligence.py tests/test_dashboard_application_service.py tests/test_phase_transition_engine.py
+[exit code: 0]
+
+$ git diff --check
+review/ARCHITECTURE_NOTES.md:19: new blank line at EOF.
+review/FILES_CHANGED.md:20: new blank line at EOF.
+review/KNOWN_ISSUES.md:19: new blank line at EOF.
+review/SPRINT_SUMMARY.md:22: new blank line at EOF.
+review/TEST_REPORT.md:14: new blank line at EOF.
+[exit code: 2]
+
+$ python -m pytest tests/test_phase_transition_engine.py -q
+
+==================================== ERRORS ====================================
+____________ ERROR collecting tests/test_phase_transition_engine.py ____________
+ImportError while importing test module '/workspace/ITOS-AI/tests/test_phase_transition_engine.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/root/.pyenv/versions/3.14.4/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_phase_transition_engine.py:5: in <module>
+    from engines.institutional_intelligence import PhaseTransitionEngine
+engines/__init__.py:2: in <module>
+    from .market_cycle_engine import MarketCycleEngine
+engines/market_cycle_engine.py:7: in <module>
+    import numpy as np
+E   ModuleNotFoundError: No module named 'numpy'
+=========================== short test summary info ============================
+ERROR tests/test_phase_transition_engine.py
+!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+1 error in 0.25s
+[exit code: 2]
+
+$ python -m pytest tests/test_dashboard_application_service.py -q
+
+==================================== ERRORS ====================================
+_________ ERROR collecting tests/test_dashboard_application_service.py _________
+ImportError while importing test module '/workspace/ITOS-AI/tests/test_dashboard_application_service.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/root/.pyenv/versions/3.14.4/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_dashboard_application_service.py:3: in <module>
+    import pandas as pd
+E   ModuleNotFoundError: No module named 'pandas'
+=========================== short test summary info ============================
+ERROR tests/test_dashboard_application_service.py
+!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+1 error in 0.32s
+[exit code: 2]
+
+
+=== Final validation rerun after documentation whitespace correction ===
+
+$ python -m py_compile dashboard_application_service.py engines/institutional_intelligence.py tests/test_dashboard_application_service.py tests/test_phase_transition_engine.py
+[exit code: 0]
+
+$ git diff --check
+[exit code: 0]
+
+$ python -m pytest tests/test_phase_transition_engine.py -q
+
+==================================== ERRORS ====================================
+____________ ERROR collecting tests/test_phase_transition_engine.py ____________
+ImportError while importing test module '/workspace/ITOS-AI/tests/test_phase_transition_engine.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/root/.pyenv/versions/3.14.4/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_phase_transition_engine.py:5: in <module>
+    from engines.institutional_intelligence import PhaseTransitionEngine
+engines/__init__.py:2: in <module>
+    from .market_cycle_engine import MarketCycleEngine
+engines/market_cycle_engine.py:7: in <module>
+    import numpy as np
+E   ModuleNotFoundError: No module named 'numpy'
+=========================== short test summary info ============================
+ERROR tests/test_phase_transition_engine.py
+!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+1 error in 0.23s
+[exit code: 2]
+
+$ python -m pytest tests/test_dashboard_application_service.py -q
+
+==================================== ERRORS ====================================
+_________ ERROR collecting tests/test_dashboard_application_service.py _________
+ImportError while importing test module '/workspace/ITOS-AI/tests/test_dashboard_application_service.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/root/.pyenv/versions/3.14.4/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_dashboard_application_service.py:3: in <module>
+    import pandas as pd
+E   ModuleNotFoundError: No module named 'pandas'
+=========================== short test summary info ============================
+ERROR tests/test_dashboard_application_service.py
+!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+1 error in 0.24s
+[exit code: 2]

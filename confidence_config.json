@@ -1,0 +1,36 @@
+{
+  "version": "1.0",
+  "weights": {
+    "Underlying trend": 0.18,
+    "OI / institutional flow": 0.20,
+    "Volume participation": 0.14,
+    "Premium confirmation": 0.13,
+    "Greeks responsiveness": 0.10,
+    "Liquidity": 0.10,
+    "Risk / reward": 0.07,
+    "Base model agreement": 0.08
+  },
+  "thresholds": {
+    "core_strong": 70,
+    "core_weak": 50,
+    "healthy": 60,
+    "trigger": 70,
+    "candidate_trigger": 70
+  },
+  "adjustments": {
+    "strong_core_bonus": 2.0,
+    "weak_core_penalty": 3.5,
+    "high_rvol_bonus": 2.0,
+    "low_rvol_penalty": 8.0,
+    "wide_spread_penalty": 5.0
+  },
+  "caps": {
+    "low_relative_volume": 69,
+    "multiple_weak_core": 64,
+    "no_contract": 49,
+    "low_contract_quality": 64,
+    "small_option_sample": 55,
+    "bad_regime": 59,
+    "hard_blocker": 49
+  }
+}
