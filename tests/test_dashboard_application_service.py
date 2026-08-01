@@ -9,7 +9,7 @@ from dashboard_application_service import (
     DashboardApplicationService,
     DashboardDataUnavailable,
 )
-from itos_platform import DecisionContext, MarketSnapshot
+from itos_platform.decision_context import DecisionContext, MarketSnapshot
 
 
 ENGINE_NAMES = [

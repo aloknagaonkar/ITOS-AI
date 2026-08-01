@@ -1,27 +1,19 @@
-# Files Changed
+# Circular-Import Fix Files Changed
 
 | File | Reason changed | Architectural impact | Backward-compatibility impact |
 |---|---|---|---|
-| `CHANGELOG.md` | Record Sprint 8 | Documents new boundary | None |
-| `dashboard_application_service.py` | Delegate engine orchestration and map typed results | Service becomes I/O/application boundary | Preserves result fields, persistence, session state, and AI inputs |
-| `itos_platform/__init__.py` | Export new contracts | Makes pipeline/policy public | Additive exports only |
-| `itos_platform/decision_pipeline.py` | Add pipeline and frozen result contract | Central orchestration and authoritative outputs | Compatibility aliases/mapping retained |
-| `itos_platform/safety_gate_policy.py` | Centralize monotonic vetoes | One typed safety decision | Existing statuses, blockers, and thresholds retained |
-| `tests/test_dashboard_application_service.py` | Characterize delegation and engine order | Tests new boundary behaviourally | Retains legacy contract assertions |
-| `tests/test_decision_pipeline.py` | Cover typed wiring and safety policy | Direct contract coverage | Verifies legacy aliases |
-| `review/docs/SPRINT_SUMMARY.md` | Sprint review summary | Documentation only | None |
-| `review/docs/TEST_REPORT.md` | Record validation constraints and coverage | Documentation only | None |
-| `review/docs/BUILD_LOG.txt` | Capture exact permitted command output | Audit evidence only | None |
-| `review/docs/FILES_CHANGED.md` | Inventory every sprint file | Documentation only | None |
-| `review/docs/ARCHITECTURE_NOTES.md` | Explain decisions, compatibility, failure, rollback | Documentation only | None |
-| `review/docs/KNOWN_ISSUES.md` | Record known limitations | Documentation only | None |
-| `review/docs/SELF_REVIEW.md` | Required structured self-assessment | Documentation only | None |
-| `review/docs/FUTURE_RECOMMENDATIONS.md` | Record out-of-scope ideas | Prevents scope creep | None |
-| `review/docs/PIPELINE_ORDER.md` | Record before/after order, dependencies, vetoes | Characterization reference | Confirms unchanged engine order |
-| `review/source/CHANGELOG.md` | Modified-source review copy | Review artifact only | None |
-| `review/source/dashboard_application_service.py` | Modified-source review copy | Review artifact only | None |
-| `review/source/itos_platform/__init__.py` | Modified-source review copy | Review artifact only | None |
-| `review/source/itos_platform/decision_pipeline.py` | Modified-source review copy | Review artifact only | None |
-| `review/source/itos_platform/safety_gate_policy.py` | Modified-source review copy | Review artifact only | None |
-| `review/source/tests/test_dashboard_application_service.py` | Modified-source review copy | Review artifact only | None |
-| `review/source/tests/test_decision_pipeline.py` | Modified-source review copy | Review artifact only | None |
+| `itos_platform/__init__.py` | Remove eager high-level imports | Restores low-level package boundary and breaks engine/package cycle | Newly introduced Sprint 8 root exports are removed; direct module imports remain public |
+| `itos_platform/decision_pipeline.py` | Import concrete engine modules | Prevents re-entry through the `engines` barrel | Engine classes, order, inputs, and results are unchanged |
+| `dashboard_application_service.py` | Import contracts and pipeline directly | Makes dependency direction explicit | Service API and dashboard result are unchanged |
+| `tests/test_dashboard_application_service.py` | Import context contracts directly | Exercises supported boundary | Test behaviour unchanged |
+| `tests/test_decision_pipeline.py` | Import high-level types directly and add fresh-process regression test | Guards package initialization order | No production compatibility impact |
+| `review/docs/ARCHITECTURE_NOTES.md` | Document dependency-boundary correction | Records rationale and avoided alternatives | None |
+| `review/docs/BUILD_LOG.txt` | Capture required validation output | Audit evidence | None |
+| `review/docs/TEST_REPORT.md` | Record import regression coverage and pytest status | Audit documentation | None |
+| `review/docs/KNOWN_ISSUES.md` | Document intentional direct-import API | Makes root-export limitation explicit | Guides callers to supported imports |
+| `review/docs/FILES_CHANGED.md` | Inventory every fix file | Review documentation | None |
+| `review/source/itos_platform/__init__.py` | Review copy of modified package root | Review artifact | None |
+| `review/source/itos_platform/decision_pipeline.py` | Review copy of modified pipeline | Review artifact | None |
+| `review/source/dashboard_application_service.py` | Review copy of modified service | Review artifact | None |
+| `review/source/tests/test_dashboard_application_service.py` | Review copy of modified service test | Review artifact | None |
+| `review/source/tests/test_decision_pipeline.py` | Review copy of modified pipeline/import test | Review artifact | None |

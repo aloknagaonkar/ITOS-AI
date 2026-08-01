@@ -15,9 +15,10 @@ from snapshot_store import SnapshotStore
 from upstox_client import UpstoxClient
 from engines import DataHealthEngine
 from engines.ai_trade_engine import AITradeEngine
-from itos_platform import (
-    DecisionContext, DecisionPipeline, MarketSnapshot, recommendation_is_available,
+from itos_platform.decision_context import (
+    DecisionContext, MarketSnapshot, recommendation_is_available,
 )
+from itos_platform.decision_pipeline import DecisionPipeline
 
 
 class DashboardDataUnavailable(RuntimeError):

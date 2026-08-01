@@ -1,11 +1,29 @@
+import subprocess
+import sys
 from types import SimpleNamespace
 from dataclasses import fields
 
 import pandas as pd
 
-from itos_platform import (
-    DecisionContext, MarketSnapshot, PipelineResults, SafetyGatePolicy,
-)
+from itos_platform.decision_context import DecisionContext, MarketSnapshot
+from itos_platform.decision_pipeline import DecisionPipeline, PipelineResults
+from itos_platform.safety_gate_policy import SafetyDecision, SafetyGatePolicy
+
+
+def test_public_import_boundaries_work_in_fresh_process():
+    imports = """
+import engines
+import itos_platform
+import itos_platform.decision_pipeline
+import dashboard_application_service
+"""
+    completed = subprocess.run(
+        [sys.executable, "-c", imports],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 0, completed.stderr
 
 
 def _result(**metadata):

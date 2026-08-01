@@ -7,16 +7,26 @@ from typing import Any
 
 import pandas as pd
 
-from engines import (
-    CandleDNAEngine, DataHealthEngine, EarlyWarningEngine, FalseBreakoutEngine,
-    InstitutionalConfidenceEngine, InstitutionalConfirmationEngine,
-    InstitutionalDecisionMatrixEngine, InstitutionalFlowEngine,
-    InstitutionalFootprintEngine, InstitutionalRadarEngine,
-    InstitutionalStructureEngine, MarketCycleEngine, MarketEnergyEngine,
-    MarketRegimeEngine, MarketStoryEngine, PatternRecognitionEngine,
-    PhaseTransitionEngine, RecommendationStabilityEngine, SignalValidationEngine,
-    SmartCandlestickEngine, SmartMoneyIndexEngine, TradeReadinessEngine,
+from engines.core_intelligence import (
+    MarketEnergyEngine, MarketRegimeEngine, SmartMoneyIndexEngine,
 )
+from engines.data_health_engine import DataHealthEngine
+from engines.institutional_confirmation import (
+    CandleDNAEngine, FalseBreakoutEngine, InstitutionalConfirmationEngine,
+    InstitutionalFootprintEngine, InstitutionalStructureEngine,
+    SmartCandlestickEngine,
+)
+from engines.institutional_flow import (
+    EarlyWarningEngine, InstitutionalConfidenceEngine, InstitutionalFlowEngine,
+    SignalValidationEngine,
+)
+from engines.institutional_intelligence import (
+    InstitutionalRadarEngine, MarketStoryEngine, PatternRecognitionEngine,
+    PhaseTransitionEngine, TradeReadinessEngine,
+)
+from engines.market_cycle_engine import MarketCycleEngine
+from engines.stability_engine import RecommendationStabilityEngine
+from engines.trade_planner import InstitutionalDecisionMatrixEngine
 from .decision_context import DecisionContext
 from .safety_gate_policy import SafetyDecision, SafetyGatePolicy
 
