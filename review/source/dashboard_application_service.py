@@ -74,6 +74,31 @@ class DashboardApplicationService:
             raw_candles = client.get_intraday_candles(
                 instrument_key, interval=timeframe, unit="minutes"
             )
+            if raw_candles.empty:
+                warning = (
+                    "Market candles are unavailable from both Upstox intraday and "
+                    "historical feeds. Data health is unhealthy and trading is forced to WAIT."
+                )
+                self.warning(warning)
+                market_snapshot = MarketSnapshot(
+                    option_result=option_result, intelligence={},
+                    historical_candles=raw_candles,
+                    timestamps={"last_refresh": self.clock()},
+                    selected_instrument=underlying, expiry=expiry, timeframe=timeframe,
+                    data_quality={"recommendation_available": False},
+                )
+                data_health_result = DataHealthEngine().analyze(market_snapshot)
+                recommendation = {
+                    "side": "WAIT", "confirmed": False,
+                    "status": "WAIT — CANDLE DATA UNAVAILABLE",
+                    "blockers": [warning],
+                }
+                return DashboardApplicationResult({
+                    "data_unavailable": True, "warning": warning,
+                    "market_snapshot": market_snapshot,
+                    "data_health_result": data_health_result,
+                    "recommendation": recommendation,
+                })
             today = date.today()
             history_from = today - timedelta(days=10)
             try:
@@ -148,10 +173,12 @@ class DashboardApplicationService:
             institutional_compatibility=institutional
         ).analyze(market_snapshot)
         engine_store = self.store_factory()
-        engine_underlying = session_state.get("underlying", underlying)
-        engine_expiry = session_state.get("expiry", expiry)
-        prior_confidence_history = engine_store.get_confidence_history(engine_underlying, engine_expiry, hours=history_hours)
-        prior_phase_history = engine_store.get_phase_history(engine_underlying, engine_expiry, hours=history_hours)
+        prior_confidence_history = engine_store.get_confidence_history(
+            market_snapshot.selected_instrument, market_snapshot.expiry, hours=history_hours
+        )
+        prior_phase_history = engine_store.get_phase_history(
+            market_snapshot.selected_instrument, market_snapshot.expiry, hours=history_hours
+        )
         decision_context = DecisionContext(
             market_snapshot=market_snapshot,
             recommendation=recommendation,
@@ -241,16 +268,30 @@ class DashboardApplicationService:
             recommendation["blockers"] = list(dict.fromkeys(recommendation.get("blockers", []) + [f"Version 7.7 validation passed {validation_result.metadata.get('passed', 0)} of {validation_result.metadata.get('total', 6)} controls"]))
             self._align_top_five(recommendation)
         if should_load:
-            engine_store.save_phase_history(engine_underlying, engine_expiry, cycle_result)
-            engine_store.save_stability_history(engine_underlying, engine_expiry, recommendation["side"], stability_result)
-        phase_history = engine_store.get_phase_history(engine_underlying, engine_expiry, hours=history_hours)
-        stability_history = engine_store.get_stability_history(engine_underlying, engine_expiry, hours=history_hours)
+            engine_store.save_phase_history(
+                market_snapshot.selected_instrument, market_snapshot.expiry, cycle_result
+            )
+            engine_store.save_stability_history(
+                market_snapshot.selected_instrument, market_snapshot.expiry,
+                recommendation["side"], stability_result,
+            )
+        phase_history = engine_store.get_phase_history(
+            market_snapshot.selected_instrument, market_snapshot.expiry, hours=history_hours
+        )
+        stability_history = engine_store.get_stability_history(
+            market_snapshot.selected_instrument, market_snapshot.expiry, hours=history_hours
+        )
         confidence_history = pd.DataFrame()
         try:
             confidence_store = self.store_factory()
             if should_load:
-                confidence_store.save_confidence_history(engine_underlying, engine_expiry, recommendation)
-            confidence_history = confidence_store.get_confidence_history(engine_underlying, engine_expiry, hours=history_hours)
+                confidence_store.save_confidence_history(
+                    market_snapshot.selected_instrument, market_snapshot.expiry, recommendation
+                )
+            confidence_history = confidence_store.get_confidence_history(
+                market_snapshot.selected_instrument, market_snapshot.expiry,
+                hours=history_hours,
+            )
         except Exception as exc:
             self.warning(f"Confidence history could not be updated: {exc}")
         trade_history = pd.DataFrame()
@@ -258,9 +299,16 @@ class DashboardApplicationService:
         try:
             trade_store = self.store_factory()
             if should_load:
-                session_state["trade_sync_result"] = trade_store.sync_trade_history(engine_underlying, engine_expiry, recommendation, option_result["chain"])
-            trade_history = trade_store.get_trade_history(engine_underlying, engine_expiry)
-            trade_stats = trade_store.trade_statistics(engine_underlying, engine_expiry)
+                session_state["trade_sync_result"] = trade_store.sync_trade_history(
+                    market_snapshot.selected_instrument, market_snapshot.expiry,
+                    recommendation, option_result["chain"],
+                )
+            trade_history = trade_store.get_trade_history(
+                market_snapshot.selected_instrument, market_snapshot.expiry
+            )
+            trade_stats = trade_store.trade_statistics(
+                market_snapshot.selected_instrument, market_snapshot.expiry
+            )
         except Exception as exc:
             self.warning(f"Trade history could not be updated: {exc}")
         trade_plan_result = None
