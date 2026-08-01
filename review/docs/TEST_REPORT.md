@@ -2,16 +2,17 @@
 
 ## Codex validation
 
-- `python -m py_compile` was executed for every modified Python file and completed successfully.
-- `git diff --check` completed successfully.
-- **pytest was not executed by Codex**, as explicitly required by the sprint validation instructions.
+- `python -m py_compile <all modified Python files>`: see `BUILD_LOG.txt`.
+- `git diff --check`: see `BUILD_LOG.txt`.
 
-## Required before merge
+## Pytest
+
+Pytest was **not executed by Codex**, as required by the sprint validation constraints.
 
 Local full-suite validation is required before merge:
 
-```text
+```bash
 python -m pytest -q
 ```
 
-No claim is made that the automated test suite passes until that local run is completed.
+The added tests characterize typed/legacy parity, malformed input, blocked recommendations, canonical instance reuse, dependency wiring, cached execution, and engine order.

@@ -167,6 +167,7 @@ class DashboardApplicationService:
             },
         )
         stability_result = RecommendationStabilityEngine(minimum_stability=70.0).analyze(decision_context)
+        decision_context.engine_results["recommendation_stability"] = stability_result
         transition_result = PhaseTransitionEngine().analyze(decision_context)
         pattern_result = PatternRecognitionEngine().analyze(decision_context)
         decision_context.engine_results["pattern_recognition"] = pattern_result
@@ -223,11 +224,16 @@ class DashboardApplicationService:
         ice_result = InstitutionalConfidenceEngine().analyze(decision_context)
         decision_context.engine_results["institutional_confidence"] = ice_result
         validation_result = SignalValidationEngine().analyze({"recommendation": recommendation, "flow_result": flow_result, "ice_result": ice_result, "confirmation_result": confirmation_result, "false_breakout_result": false_breakout_result, "stability_result": stability_result})
-        early_warning_result = EarlyWarningEngine().analyze({"recommendation": recommendation, "flow_result": flow_result, "ice_result": ice_result, "validation_result": validation_result})
+        decision_context.engine_results["signal_validation"] = validation_result
+        early_warning_result = EarlyWarningEngine().analyze(decision_context)
+        decision_context.engine_results["early_warning"] = early_warning_result
         recommendation.update({"institutional_flow_v77": flow_result.metadata, "institutional_confidence_v77": ice_result.metadata, "signal_validation_v77": validation_result.metadata, "early_warning_v77": early_warning_result.metadata})
-        regime_result = MarketRegimeEngine().analyze({"option_result": option_result, "intelligence": intelligence, "flow_result": flow_result, "cycle_result": cycle_result})
-        smi_result = SmartMoneyIndexEngine().analyze({"recommendation": recommendation, "flow_result": flow_result, "ice_result": ice_result, "confirmation_result": confirmation_result, "regime_result": regime_result, "stability_result": stability_result, "false_breakout_result": false_breakout_result})
-        energy_result = MarketEnergyEngine().analyze({"recommendation": recommendation, "option_result": option_result, "intelligence": intelligence, "flow_result": flow_result})
+        regime_result = MarketRegimeEngine().analyze(decision_context)
+        decision_context.engine_results["market_regime"] = regime_result
+        smi_result = SmartMoneyIndexEngine().analyze(decision_context)
+        decision_context.engine_results["smart_money_index"] = smi_result
+        energy_result = MarketEnergyEngine().analyze(decision_context)
+        decision_context.engine_results["market_energy"] = energy_result
         recommendation.update({"market_regime_v80": regime_result.metadata, "smart_money_index_v80": smi_result.metadata, "market_energy_v80": energy_result.metadata})
         if recommendation.get("confirmed") and not validation_result.metadata.get("validated", False):
             recommendation["confirmed"] = False

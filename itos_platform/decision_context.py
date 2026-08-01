@@ -88,6 +88,12 @@ class DecisionContext:
     decision_history: Any = None
     strike_history: Any = None
     stability_history: Any = None
+    flow_result: Any = None
+    institutional_confidence_result: Any = None
+    validation_result: Any = None
+    confirmation_result: Any = None
+    stability_result: Any = None
+    false_breakout_result: Any = None
 
     def __post_init__(self) -> None:
         """Reconcile canonical fields with Sprint 2 constructor aliases."""
@@ -98,6 +104,21 @@ class DecisionContext:
             cycle_result = engine_results.get("market_cycle")
         elif "market_cycle" not in engine_results:
             engine_results["market_cycle"] = cycle_result
+
+        result_fields = {
+            "flow_result": "institutional_flow",
+            "institutional_confidence_result": "institutional_confidence",
+            "validation_result": "signal_validation",
+            "confirmation_result": "institutional_confirmation",
+            "stability_result": "recommendation_stability",
+            "false_breakout_result": "false_breakout",
+        }
+        for field_name, result_name in result_fields.items():
+            value = getattr(self, field_name)
+            if value is None:
+                object.__setattr__(self, field_name, engine_results.get(result_name))
+            elif result_name not in engine_results:
+                engine_results[result_name] = value
 
         runtime_configuration = dict(self.runtime or {})
         runtime_configuration.update(self.runtime_configuration or {})

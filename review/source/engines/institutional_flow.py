@@ -189,6 +189,7 @@ class InstitutionalConfidenceEngine(BaseEngine):
     def analyze(self, market_data: DecisionContext | Mapping[str, Any]) -> EngineResult:
         market_data = self._adapt_input(market_data)
         recommendation = market_data.get("recommendation", {})
+        recommendation = recommendation if isinstance(recommendation, Mapping) else {}
         flow = market_data.get("flow_result")
         confirmation = market_data.get("confirmation_result")
         cycle = market_data.get("cycle_result")
@@ -293,16 +294,21 @@ class SignalValidationEngine(BaseEngine):
 class EarlyWarningEngine(BaseEngine):
     name = "AI Early Warning Engine"
 
-    def analyze(self, market_data: dict[str, Any]) -> EngineResult:
+    def analyze(self, market_data: DecisionContext | Mapping[str, Any]) -> EngineResult:
+        market_data = self._adapt_input(market_data)
         recommendation = market_data.get("recommendation", {})
         flow = market_data.get("flow_result")
         ice = market_data.get("ice_result")
         validation = market_data.get("validation_result")
         side = str(recommendation.get("side", "WAIT"))
         confidence = _num(getattr(ice, "score", 0))
-        acceleration = abs(_num(getattr(flow, "metadata", {}).get("oi_acceleration")))
-        snapshots = int(_num(getattr(flow, "metadata", {}).get("snapshot_count")))
-        if getattr(validation, "metadata", {}).get("validated"):
+        flow_metadata = getattr(flow, "metadata", {})
+        flow_metadata = flow_metadata if isinstance(flow_metadata, Mapping) else {}
+        validation_metadata = getattr(validation, "metadata", {})
+        validation_metadata = validation_metadata if isinstance(validation_metadata, Mapping) else {}
+        acceleration = abs(_num(flow_metadata.get("oi_acceleration")))
+        snapshots = int(_num(flow_metadata.get("snapshot_count")))
+        if validation_metadata.get("validated"):
             state = "TRIGGER CONFIRMED"
             eta = "NOW"
             probability = max(confidence, 75)
@@ -315,7 +321,22 @@ class EarlyWarningEngine(BaseEngine):
             state = "NO EARLY SETUP"
             eta = "Not available"
             probability = min(confidence, 55)
-        return EngineResult(self.name, probability, side if state != "NO EARLY SETUP" else "WAIT", [state], {
+        informational_only = state != "TRIGGER CONFIRMED"
+        actionable = state != "NO EARLY SETUP" and bool(recommendation.get("confirmed"))
+        return EngineResult(self.name, probability, side if actionable else "WAIT", [state], {
             "state": state, "probability": round(probability, 1), "estimated_trigger": eta,
             "side": side, "preparation": "Prepare contract and wait for validation" if "EARLY" in state else "No action",
+            "informational_only": informational_only,
         })
+
+    @staticmethod
+    def _adapt_input(market_data: DecisionContext | Mapping[str, Any]) -> Mapping[str, Any]:
+        if not isinstance(market_data, DecisionContext):
+            return market_data if isinstance(market_data, Mapping) else {}
+        results = market_data.engine_results if isinstance(market_data.engine_results, Mapping) else {}
+        return {
+            "recommendation": market_data.recommendation if isinstance(market_data.recommendation, Mapping) else {},
+            "flow_result": market_data.flow_result or results.get("institutional_flow"),
+            "ice_result": market_data.institutional_confidence_result or results.get("institutional_confidence"),
+            "validation_result": market_data.validation_result or results.get("signal_validation"),
+        }
