@@ -1,3 +1,3 @@
-# Sprint 11 Summary
+# Sprint 12 Summary
 
-Implemented the immutable `MarketLocation`, configurable `MarketLocationSettings`, and repository/UI-independent `MarketLocationEngine`. The pipeline computes it after candle and structure evidence and reuses that instance through `DecisionContext`, `PipelineResults`, and dashboard values. A collapsed informational preview and behavioral tests were added. Recommendation and safety logic remain unchanged.
+Implemented immutable, location-aware price-volume intelligence, pipeline reuse, compatibility exposure, safe dashboard summaries, deterministic behavioural contracts, and review artifacts. Outputs are informational and do not influence CE/PE/WAIT.

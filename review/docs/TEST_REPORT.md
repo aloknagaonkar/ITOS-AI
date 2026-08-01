@@ -1,7 +1,5 @@
 # Test Report
 
-Behavioral tests cover all static zones, middle rotations, confirmed breaks, retests, failures, invalid and insufficient input, zero-width ranges, fallback hierarchy, clamping, typed/legacy parity, identity reuse, immutability, and dashboard-facing fields.
+pytest not executed by Codex — local validation required.
 
-**pytest not executed by Codex — local validation required.**
-
-Local merge validation command: `python -m pytest -q`.
+Deterministic contracts cover the location matrix, breakouts/retests, absorption, degradation, score bounds, context parity, and dashboard-facing fields. Run locally with `python -m pytest -q`. UI validation: `streamlit run app.py`.
