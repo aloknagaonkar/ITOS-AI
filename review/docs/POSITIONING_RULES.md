@@ -24,3 +24,6 @@ Contradictory directional votes produce `CONFLICTED`; competing options signals 
 
 ## Human explanations and safe degradation
 Every state separates measured evidence from cautious interpretation and provides its human meaning and conditional market impact. No guarantee is expressed. The output is informational only and cannot promote BUY CE/PE, modify WAIT, or affect safety, confidence, strikes, planning, or execution.
+
+## Canonical dependency and premium-side rules
+A typed `DecisionContext` requires `VolumeStructure` before futures positioning can be inferred; when it is absent, futures positioning is unavailable and snapshot intelligence is not used to reconstruct direction. True or explicitly labelled proxy OI is also required. Options premium availability is side-specific: `CALL_PREMIUM_UNAVAILABLE` affects only call states and `PUT_PREMIUM_UNAVAILABLE` affects only put states. Missing opposite-side premium remains a quality disclosure but does not impose the selected state's missing-data ceiling.

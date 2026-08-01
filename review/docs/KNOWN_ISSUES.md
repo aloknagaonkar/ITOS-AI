@@ -5,3 +5,6 @@
 - Put buying can represent protection, and call buying can represent hedging; the UI deliberately uses conditional language.
 - Strike rotation, rollover, historical learning, and automated execution are outside this sprint.
 - Streamlit rendering and the full pytest suite require local validation.
+
+## Corrective note
+Premium availability is evaluated per option side. An unavailable opposite-side premium remains visible as a quality flag but does not cap an otherwise valid selected state.

@@ -10,3 +10,17 @@ exit code: 0
 
 pytest not executed by Codex — local validation required.
 UI validation not executed by Codex — local validation required.
+
+Sprint 13 corrective validation
+
+$ python -m py_compile \\
+  itos_platform/positioning_intelligence.py \\
+  tests/test_positioning_intelligence.py
+[no stdout/stderr]
+exit code: 0
+
+$ git diff --check
+[no stdout/stderr]
+exit code: 0
+
+pytest not executed by Codex — local validation required.

@@ -5,3 +5,6 @@ Behavioural tests were added for the futures matrix, neutral/missing/proxy input
 **pytest not executed by Codex — local validation required.**
 
 Local validation commands are `python -m pytest -q` and `streamlit run app.py`. UI validation was not executed by Codex.
+
+## Sprint 13 corrective validation
+Focused behavioural coverage now requires canonical `volume_structure`, preserves unavailable OI degradation, isolates premium availability by option side, verifies location bonuses for writing, rejects malformed premium evidence, and confirms recommendations remain unchanged. Pytest was not executed by Codex — local validation required.

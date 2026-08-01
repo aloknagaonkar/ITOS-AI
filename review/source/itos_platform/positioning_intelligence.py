@@ -130,11 +130,10 @@ class PositioningIntelligenceEngine:
         flags: list[str] = []
         evidence: list[str] = []
         contradictions: list[str] = []
+        if volume is None:
+            flags.append("VOLUME_STRUCTURE_UNAVAILABLE")
+            return self._state("UNAVAILABLE", 0.0, evidence, contradictions, flags)
         price = self._number(getattr(volume, "price_change_percent", None))
-        if price is None:
-            intelligence = context.market_snapshot.intelligence
-            price_data = intelligence.get("price", {}) if isinstance(intelligence, Mapping) else {}
-            price = self._first_number(price_data if isinstance(price_data, Mapping) else {}, ("change_percent", "price_change_percent", "change"))
         if price is None:
             flags.append("PRICE_DIRECTION_UNAVAILABLE")
         summary = context.market_snapshot.option_result.get("summary", {}) if isinstance(context.market_snapshot.option_result, Mapping) else {}
@@ -150,9 +149,7 @@ class PositioningIntelligenceEngine:
             flags.extend(("OI_UNAVAILABLE", "OI_HISTORY_INSUFFICIENT"))
         elif proxy:
             flags.append("FUTURES_OI_PROXY_ONLY")
-        if volume is None:
-            flags.append("VOLUME_STRUCTURE_UNAVAILABLE")
-        elif "STALE_DATA" in getattr(volume, "quality_flags", ()):
+        if "STALE_DATA" in getattr(volume, "quality_flags", ()):
             flags.append("STALE_DATA")
         if context.market_location is None:
             flags.append("MARKET_LOCATION_UNAVAILABLE")
@@ -205,7 +202,8 @@ class PositioningIntelligenceEngine:
             name = next((name for name in names if name in frame), None)
             values = pd.to_numeric(frame[name], errors="coerce").dropna() if name else pd.Series(dtype=float)
             premium[key] = float(values.mean()) if not values.empty else None
-        if any(value is None for value in premium.values()): flags.append("OPTION_PREMIUM_UNAVAILABLE")
+        if premium["call_premium"] is None: flags.append("CALL_PREMIUM_UNAVAILABLE")
+        if premium["put_premium"] is None: flags.append("PUT_PREMIUM_UNAVAILABLE")
         volatility = getattr(metrics, "volatility", None)
         if volatility is None or (getattr(volatility, "call_iv", None) is None and getattr(volatility, "put_iv", None) is None): flags.append("IV_UNAVAILABLE")
         greeks = getattr(metrics, "greeks", None)
@@ -251,7 +249,14 @@ class PositioningIntelligenceEngine:
                 consistent = (state == "PUT_WRITING" and zone in {"BOTTOM", "LOWER_RANGE"}) or (state == "CALL_WRITING" and zone in {"TOP", "UPPER_RANGE"})
                 confidence += s.context_weight if consistent else 0.0
                 if consistent: evidence.append(f"The {zone.replace('_', ' ').lower()} location supports this conditional interpretation.")
-        critical = {"OPTION_PREMIUM_UNAVAILABLE", "LIQUIDITY_THIN"}
+        selected_side_flag = (
+            "CALL_PREMIUM_UNAVAILABLE" if state.startswith("CALL_")
+            else "PUT_PREMIUM_UNAVAILABLE" if state.startswith("PUT_")
+            else None
+        )
+        critical = {"LIQUIDITY_THIN"}
+        if selected_side_flag is not None:
+            critical.add(selected_side_flag)
         if critical.intersection(flags): confidence = min(confidence, s.missing_data_confidence_ceiling)
         return self._state(state, confidence - len(contradictions) * s.conflict_penalty / 2, evidence, contradictions, flags)
 

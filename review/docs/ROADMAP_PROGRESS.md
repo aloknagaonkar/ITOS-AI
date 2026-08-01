@@ -29,3 +29,6 @@ A deferred intelligence feature should proceed only after product approval; Comp
 | Market Narrative / historical learning | Missing / deferred | None |
 | Wyckoff / ORB / Fibonacci / liquidity sweep | Missing / deferred | None |
 | Automated execution | Missing / deferred | None |
+
+## Sprint 13 corrective status
+Canonical dependency degradation and side-specific premium quality handling are corrected before Sprint 13A. Scope and decision impact remain unchanged.

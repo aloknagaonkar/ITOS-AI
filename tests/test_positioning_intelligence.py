@@ -70,7 +70,7 @@ def test_options_require_premium_and_demand_confirmation(metrics, chain, state):
 def test_oi_alone_does_not_force_options_classification():
     result = PositioningIntelligenceEngine().analyze(_context(metrics=_metrics(put_oi=20, put_writing=10))).options
     assert result.state == "NEUTRAL"
-    assert "OPTION_PREMIUM_UNAVAILABLE" in result.quality_flags
+    assert {"CALL_PREMIUM_UNAVAILABLE", "PUT_PREMIUM_UNAVAILABLE"}.issubset(result.quality_flags)
 
 
 def test_mixed_options_and_thin_liquidity_are_cautious():
@@ -112,3 +112,61 @@ def test_location_context_strengthens_conditional_writing():
     bottom = PositioningIntelligenceEngine().analyze(_context(metrics=metrics, chain=chain, location=_location("BOTTOM"))).options
     middle = PositioningIntelligenceEngine().analyze(_context(metrics=metrics, chain=chain)).options
     assert bottom.state == "PUT_WRITING" and bottom.confidence > middle.confidence
+
+
+def test_typed_context_requires_volume_structure_for_futures():
+    context = replace(_context(), volume_structure=None)
+    result = PositioningIntelligenceEngine().analyze(context).futures
+    assert result.state == "UNAVAILABLE"
+    assert "VOLUME_STRUCTURE_UNAVAILABLE" in result.quality_flags
+
+
+def test_missing_true_and_proxy_oi_is_unavailable():
+    result = PositioningIntelligenceEngine().analyze(_context(oi=None)).futures
+    assert result.state == "UNAVAILABLE"
+    assert "OI_UNAVAILABLE" in result.quality_flags
+
+
+def test_opposite_side_missing_premium_does_not_cap_valid_writing():
+    put_result = PositioningIntelligenceEngine().analyze(_context(
+        metrics=_metrics(put_oi=20, put_writing=10),
+        chain={"put_price_change": [-1]}, location=_location("BOTTOM"),
+    )).options
+    call_result = PositioningIntelligenceEngine().analyze(_context(
+        metrics=_metrics(call_oi=20, call_writing=10),
+        chain={"call_price_change": [-1]}, location=_location("TOP"),
+    )).options
+    assert put_result.state == "PUT_WRITING" and put_result.confidence > 40
+    assert "CALL_PREMIUM_UNAVAILABLE" in put_result.quality_flags
+    assert call_result.state == "CALL_WRITING" and call_result.confidence > 40
+    assert "PUT_PREMIUM_UNAVAILABLE" in call_result.quality_flags
+
+
+@pytest.mark.parametrize(("metrics", "chain", "blocked_state"), [
+    (_metrics(call_oi=20, call_writing=10), {"put_price_change": [-1]}, "CALL_WRITING"),
+    (_metrics(put_oi=20, put_writing=10), {"call_price_change": [-1]}, "PUT_WRITING"),
+])
+def test_missing_selected_side_premium_prevents_classification(metrics, chain, blocked_state):
+    result = PositioningIntelligenceEngine().analyze(_context(metrics=metrics, chain=chain)).options
+    assert result.state == "NEUTRAL"
+    assert result.state != blocked_state
+
+
+def test_top_location_increases_valid_call_writing_confidence():
+    metrics = _metrics(call_oi=20, call_writing=10)
+    chain = {"call_price_change": [-1]}
+    top = PositioningIntelligenceEngine().analyze(_context(metrics=metrics, chain=chain, location=_location("TOP"))).options
+    middle = PositioningIntelligenceEngine().analyze(_context(metrics=metrics, chain=chain)).options
+    assert top.state == "CALL_WRITING" and top.confidence > middle.confidence
+
+
+def test_malformed_chain_cannot_create_options_positioning_or_promote_trade():
+    recommendation = {"side": "WAIT", "status": "WAIT", "confirmed": False}
+    context = replace(
+        _context(metrics=_metrics(call_oi=20, put_oi=20), chain={"call_price_change": ["bad"]}),
+        recommendation=recommendation,
+    )
+    result = PositioningIntelligenceEngine().analyze(context)
+    assert result.options.state == "NEUTRAL"
+    assert context.recommendation == recommendation
+    assert context.recommendation["side"] == "WAIT"
