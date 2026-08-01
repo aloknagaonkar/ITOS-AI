@@ -164,7 +164,7 @@ class DashboardApplicationService:
             },
         )
         stability_result = RecommendationStabilityEngine(minimum_stability=70.0).analyze(decision_context)
-        transition_result = PhaseTransitionEngine().analyze({"cycle_result": cycle_result})
+        transition_result = PhaseTransitionEngine().analyze(decision_context)
         pattern_result = PatternRecognitionEngine().analyze({"recommendation": recommendation, "option_result": option_result, "intelligence": intelligence, "institutional": institutional, "cycle_result": cycle_result})
         readiness_result = TradeReadinessEngine().analyze({"recommendation": recommendation, "cycle_result": cycle_result, "stability_result": stability_result, "pattern_result": pattern_result})
         radar_result = InstitutionalRadarEngine().analyze({"recommendation": recommendation, "option_result": option_result, "intelligence": intelligence, "institutional": institutional})

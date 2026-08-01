@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 import numpy as np
 
 from .base_engine import BaseEngine, EngineResult
+from itos_platform import DecisionContext, MarketSnapshot
 
 
 def _num(value: Any, default: float = 0.0) -> float:
@@ -41,10 +43,20 @@ class PhaseTransitionEngine(BaseEngine):
         "Unknown": ("Unknown", "WAIT"),
     }
 
-    def analyze(self, market_data: dict[str, Any]) -> EngineResult:
-        cycle = market_data.get("cycle_result")
-        meta = getattr(cycle, "metadata", {}) or market_data.get("cycle", {})
+    def analyze(
+        self, market_data: DecisionContext | Mapping[str, Any]
+    ) -> EngineResult:
+        context = self._adapt_input(market_data)
+        cycle = context.cycle_result
+        cycle_metadata = getattr(cycle, "metadata", {})
+        meta = (
+            cycle_metadata
+            if isinstance(cycle_metadata, Mapping) and cycle_metadata
+            else context.runtime_configuration.get("cycle", {})
+        )
+        meta = meta if isinstance(meta, Mapping) else {}
         probabilities = meta.get("probabilities", {}) or {}
+        probabilities = probabilities if isinstance(probabilities, Mapping) else {}
         current = str(meta.get("phase", "Unknown"))
         ordered = sorted(probabilities.items(), key=lambda x: _num(x[1]), reverse=True)
         lead = _num(ordered[0][1]) if ordered else 0.0
@@ -67,6 +79,29 @@ class PhaseTransitionEngine(BaseEngine):
             "transition_state": state,
             "phase_gap": gap,
         })
+
+    @staticmethod
+    def _adapt_input(
+        market_data: DecisionContext | Mapping[str, Any],
+    ) -> DecisionContext:
+        """Normalize typed and legacy calls before running the shared calculation."""
+
+        if isinstance(market_data, DecisionContext):
+            return market_data
+
+        snapshot = market_data.get("market_snapshot")
+        if not isinstance(snapshot, MarketSnapshot):
+            snapshot = MarketSnapshot.from_legacy(market_data)
+        cycle_result = market_data.get("cycle_result")
+        engine_results = dict(market_data.get("engine_results") or {})
+        if cycle_result is not None:
+            engine_results.setdefault("market_cycle", cycle_result)
+        return DecisionContext(
+            market_snapshot=snapshot,
+            recommendation=market_data.get("recommendation") or {},
+            engine_results=engine_results,
+            runtime_configuration={"cycle": market_data.get("cycle", {})},
+        )
 
 
 class PatternRecognitionEngine(BaseEngine):

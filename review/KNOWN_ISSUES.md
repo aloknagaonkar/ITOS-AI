@@ -1,16 +1,18 @@
 # Known Issues
 
-## Merge-gate Blocker
-`python -m pytest -q` was invoked but stops during collection because `pandas` and
-`numpy` are unavailable. Five collection errors occur and no tests execute, so the
-required pytest merge gate is not satisfied in this container.
+## Unexecuted Validation
+The full repository test suite was not run, per the sprint instruction to run
+targeted validation only. It remains a manual pre-merge check.
 
 ## Environment Limitations
-The Python 3.14.4 environment lacks project dependencies. Both pip installation
-and an apt repository attempt were blocked by the environment's HTTP 403 proxy.
-A dependency-provisioned CI runner must execute the required pytest command.
+Both targeted pytest files stop during collection because NumPy and pandas are unavailable
+in this Python environment. Consequently, zero tests were collected or executed.
 
-## Compatibility Debt
-Legacy mapping input through `RecommendationStabilityEngine._adapt_input` is
-intentional temporary migration support. Most remaining engines still accept
-mapping-shaped inputs and are deferred to later incremental sprints.
+## Temporary Compatibility Adapter
+`PhaseTransitionEngine._adapt_input` intentionally supports legacy mapping calls,
+including the historical inline `cycle` fallback. Removal is deferred until all
+callers use `DecisionContext`.
+
+## Deferred Cleanup
+Other downstream engines still consume legacy mappings and will be migrated in
+future incremental sprints. No unrelated cleanup was included in Sprint 4.
