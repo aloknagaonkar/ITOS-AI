@@ -1,5 +1,3 @@
 # Architecture Notes
 
-`DecisionPipeline.execute` obtains metrics once, stores that exact immutable instance on a replaced `DecisionContext`, and passes the context through the migrated engines. A caller-supplied instance bypasses calculation. The optional constructor dependency exists for deterministic counting and does not change default behavior.
-
-Each migrated engine owns one `_adapt_input` boundary. Typed contexts preserve the metrics object by identity. Legacy mappings remain accepted and may contain `institutional_metrics`; otherwise pre-Sprint-10 raw calculations remain the fallback. No engine constructs `InstitutionalMetrics`.
+The engine accepts either the canonical `DecisionContext` or a legacy mapping adapted once to `MarketSnapshot`. It reads only snapshot/configuration data, returns an immutable value object, and performs no persistence, Streamlit access, mutation, or recommendation work. Pipeline placement is after market-cycle, pattern, candle-DNA, smart-candlestick, and structure analysis. Downstream/application consumers receive the identical object stored under `engine_results["market_location"]` and `DecisionContext.market_location`.

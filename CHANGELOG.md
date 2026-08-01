@@ -70,3 +70,12 @@
 - Migrated Pattern Recognition, Candle DNA, Smart Candlestick, Institutional Structure, and False Breakout engines to prefer `DecisionContext` while retaining legacy dictionary calls.
 - Reused the dashboard's canonical `MarketSnapshot` and `DecisionContext` across the migrated structure-intelligence pipeline without changing engine order or safety gates.
 - Added typed-versus-legacy parity coverage, malformed/missing-data degradation checks, context identity characterization, and false-breakout safety parity.
+## Sprint 11 — Market Location & Transition Engine v1
+
+- Added immutable market-location intelligence with configuration-driven zones,
+  deterministic range selection, transition detection, quality flags, and safe
+  degradation.
+- Exposed the same informational result through the decision context, pipeline,
+  application compatibility mapping, and a collapsed dashboard preview without
+  changing CE, PE, or WAIT recommendation logic.
+- Added deterministic behavioral coverage and a Sprint 11 review/source package.

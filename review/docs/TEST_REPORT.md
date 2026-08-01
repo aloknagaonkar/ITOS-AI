@@ -1,7 +1,7 @@
 # Test Report
 
-pytest not executed by Codex — local validation required.
+Behavioral tests cover all static zones, middle rotations, confirmed breaks, retests, failures, invalid and insufficient input, zero-width ranges, fallback hierarchy, clamping, typed/legacy parity, identity reuse, immutability, and dashboard-facing fields.
 
-Added characterization for shared object identity across all four adapters and Radar parity between equivalent raw totals and typed metrics. Existing parity tests continue to cover complete/empty Flow data, Radar directions, Confidence contributions, Decision Matrix rows, malformed input, recommendation fixtures, and monotonic safety vetoes.
+**pytest not executed by Codex — local validation required.**
 
-Local validation command: `python -m pytest -q`.
+Local merge validation command: `python -m pytest -q`.

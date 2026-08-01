@@ -1,14 +1,5 @@
-Sprint 10 Codex validation (UTC 2026-08-01)
-
-$ python -m py_compile engines/institutional_flow.py engines/institutional_intelligence.py engines/trade_planner.py itos_platform/decision_context.py itos_platform/decision_pipeline.py tests/test_institutional_flow_context.py
-
-[exit status: 0]
+$ python -m py_compile app.py itos_platform/__init__.py itos_platform/decision_context.py itos_platform/decision_pipeline.py itos_platform/market_location.py tests/test_market_location.py
+exit status: 0
 
 $ git diff --check
-
-[exit status: 0]
-
-Final source-package check:
-$ git diff --check
-
-[exit status: 0]
+exit status: 0
