@@ -1,4 +1,12 @@
-$ python -m py_compile app.py itos_platform/volume_structure.py tests/test_volume_structure.py review/source/app.py review/source/itos_platform/volume_structure.py review/source/tests/test_volume_structure.py
+Sprint 13 validation build log
+
+$ python -m py_compile app.py dashboard_application_service.py itos_platform/__init__.py itos_platform/decision_context.py itos_platform/decision_pipeline.py itos_platform/positioning_intelligence.py tests/test_positioning_intelligence.py review/source/app.py review/source/dashboard_application_service.py review/source/itos_platform/__init__.py review/source/itos_platform/decision_context.py review/source/itos_platform/decision_pipeline.py review/source/itos_platform/positioning_intelligence.py review/source/tests/test_positioning_intelligence.py
+[no stdout/stderr]
 exit code: 0
+
 $ git diff --check
+[no stdout/stderr]
 exit code: 0
+
+pytest not executed by Codex — local validation required.
+UI validation not executed by Codex — local validation required.

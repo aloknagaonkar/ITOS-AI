@@ -1,30 +1,31 @@
-# Roadmap Progress — Sprint 12
+# Roadmap Progress — Sprint 13
 
-## Added from the Master Feature Register
-Sprint 12 adds the immutable `VolumeStructure` contract, configurable multi-candle price and volume analysis, relative volume, confirmation, effort-versus-result classification, location-aware interpretation, accumulation/distribution/absorption/exhaustion evidence scores, safe degradation, canonical pipeline exposure, and additive dashboard presentation.
+## 1. Features added from the missing list
+Immutable Positioning Intelligence, futures price/OI states, premium-confirmed options writing/buying states, meanings, impacts, confidence, evidence, contradictions, quality flags, pipeline/application exposure, Market Status positioning, and the dashboard panel are now implemented.
 
-## Remaining missing features
-Positioning Intelligence, Compression Intelligence, Manipulation Intelligence, Institutional Evidence, Decision Confidence Index, Wyckoff phase labels, ORB, Fibonacci logic, liquidity-sweep trade rules, and automated execution remain deferred. No deferred value is inferred or displayed as implemented.
+## 2. What remains missing
+Compression Intelligence, Manipulation Intelligence, Institutional Evidence, Decision Confidence Index, Market Narrative, historical learning, Wyckoff phases, ORB, Fibonacci, liquidity-sweep rules, trade-planner changes, strike rotation/rollover, and automated execution remain missing/deferred.
 
-## Dashboard additions
-A compact **Market Status** summary was added below Market Cycle / Structure Intelligence. The **Price & Volume Behaviour** expander was added after Market Location & Transition and before Institutional Metrics v2 Preview. Existing cards, expanders, tables, charts, exports, downloads, session-state output, recommendation panels, and AI Trade Opportunity remain in place.
+## 3. Dashboard additions
+Market Status now adds Positioning and Positioning Meaning. A collapsed **Positioning Intelligence** expander sits below Price & Volume Behaviour and above Institutional Metrics v2 Preview. No existing dashboard component, export, or download was removed, renamed, or moved.
 
-## Decision impact
-None. Volume structure is informational only and is not read by recommendation, confidence, SafetyGatePolicy, strike selection, trade planning, or AI Trade Opportunity formulas.
+## 4. Decision impact
+None. Positioning Intelligence is informational only. CE/PE/WAIT, current confidence, SafetyGatePolicy, AI Trade Opportunity, strike ranking, and trade plans are unchanged.
 
-## Next planned sprint
-The next feature should be selected from the deferred register only after product approval. Positioning Intelligence is the anticipated next analytical layer, but is not part of Sprint 12.
+## 5. Next sprint
+A deferred intelligence feature should proceed only after product approval; Compression Intelligence is the next register candidate.
 
-## Updated Master Feature Register
+## 6. Updated Master Feature Register
 | Feature | Status | Decision influence |
 |---|---|---|
-| Market Location & Transition | Existing | Existing behaviour unchanged |
-| Volume Structure & Price-Volume Behaviour v1 | Added in Sprint 12 | Informational only |
-| Market Status summary | Added in Sprint 12 | Informational only |
-| Positioning Intelligence | Missing / deferred | None |
+| Market Location & Transition | Existing | Unchanged |
+| Volume Structure v1 | Existing (Sprint 12) | Informational only |
+| Positioning Intelligence v1 | Added (Sprint 13) | Informational only |
+| Market Status positioning | Added (Sprint 13) | Informational only |
 | Compression Intelligence | Missing / deferred | None |
 | Manipulation Intelligence | Missing / deferred | None |
 | Institutional Evidence | Missing / deferred | None |
 | Decision Confidence Index | Missing / deferred | None |
-| Wyckoff / ORB / Fibonacci / liquidity sweep rules | Missing / deferred | None |
-| Automated order execution | Missing / deferred | None |
+| Market Narrative / historical learning | Missing / deferred | None |
+| Wyckoff / ORB / Fibonacci / liquidity sweep | Missing / deferred | None |
+| Automated execution | Missing / deferred | None |

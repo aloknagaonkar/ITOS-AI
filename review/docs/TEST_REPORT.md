@@ -1,5 +1,7 @@
-# Test Report
+# Sprint 13 Test Report
 
-pytest not executed by Codex — local validation required.
+Behavioural tests were added for the futures matrix, neutral/missing/proxy inputs, options premium confirmation, buying/writing/mixed states, liquidity, IV, Greeks, volume confirmation, malformed inputs, location context, confidence bounds, and decision neutrality.
 
-Deterministic contracts cover the location matrix, breakouts/retests, absorption, degradation, score bounds, context parity, and dashboard-facing fields. Run locally with `python -m pytest -q`. UI validation: `streamlit run app.py`.
+**pytest not executed by Codex — local validation required.**
+
+Local validation commands are `python -m pytest -q` and `streamlit run app.py`. UI validation was not executed by Codex.
