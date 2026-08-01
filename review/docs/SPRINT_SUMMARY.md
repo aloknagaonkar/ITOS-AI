@@ -1,3 +1,3 @@
-# Sprint 12 Summary
+# Sprint 13 Summary — Positioning Intelligence v1
 
-Implemented immutable, location-aware price-volume intelligence, pipeline reuse, compatibility exposure, safe dashboard summaries, deterministic behavioural contracts, and review artifacts. Outputs are informational and do not influence CE/PE/WAIT.
+Sprint 13 adds immutable futures-style and options positioning classifications, cautious meanings and market-impact descriptions, evidence, contradictions, quality flags, and configuration-driven confidence. One result is calculated after Institutional Metrics, Market Location, and Volume Structure and is reused by DecisionContext, PipelineResults, DashboardApplicationResult, Market Status, and the additive dashboard panel. The feature is informational only; recommendation, confidence, safety, strikes, planning, persistence, and execution are unchanged.

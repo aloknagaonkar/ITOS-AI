@@ -1,3 +1,9 @@
-# Architecture Notes
+# Sprint 13 Architecture Notes
 
-`VolumeStructureEngine` is repository- and UI-free. It consumes the canonical `DecisionContext` only after `MarketLocationEngine`, and its one immutable result is attached to the replaced context and `PipelineResults`. Recommendation and safety paths do not consume the result.
+The data path remains `MarketSnapshot → InstitutionalMetrics → DecisionContext → DecisionPipeline → PipelineResults → DashboardApplicationResult → app.py`. `PositioningIntelligenceEngine` runs after `VolumeStructureEngine`, performs no repository or Streamlit access, and returns one frozen `PositioningIntelligence` composed of frozen `PositioningState` values. The exact instance is placed in the context engine-result mapping and named context field, then passed into PipelineResults and its existing dashboard compatibility mapping. The dashboard only renders the supplied result.
+
+The engine reads validated multi-candle price direction from VolumeStructure, explicitly labelled futures OI from the option-result summary, and options evidence from the normalized InstitutionalMetrics plus the supplied chain. Options OI is used as a futures proxy only when `futures_oi_proxy` explicitly opts in.
+
+## DecisionContext reconciliation test contract
+
+Sprint 13 follow-up tests explicitly preserve the existing reconciliation contract: `DecisionContext.__post_init__` restores a missing named result from `engine_results`. Missing-dependency positioning tests therefore remove the dependency from both representations; production reconciliation and Positioning Intelligence behaviour remain unchanged.
