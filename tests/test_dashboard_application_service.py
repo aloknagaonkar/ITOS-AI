@@ -309,7 +309,8 @@ def test_service_preserves_pipeline_outputs_session_keys_and_order(harness):
         assert harness.calls[institutional_engine] is result.decision_context
     for migrated_engine in (
         "PatternRecognitionEngine", "CandleDNAEngine", "SmartCandlestickEngine",
-        "InstitutionalStructureEngine", "FalseBreakoutEngine",
+        "InstitutionalStructureEngine", "FalseBreakoutEngine", "EarlyWarningEngine",
+        "MarketRegimeEngine", "SmartMoneyIndexEngine", "MarketEnergyEngine",
     ):
         assert harness.calls[migrated_engine] is result.decision_context
     assert result.decision_context.market_snapshot is result.market_snapshot
@@ -321,8 +322,10 @@ def test_service_preserves_pipeline_outputs_session_keys_and_order(harness):
     assert result.decision_context.engine_results["institutional_flow"] is result.flow_result
     assert result.decision_context.engine_results["institutional_confidence"] is result.ice_result
     assert harness.calls["SignalValidationEngine"]["ice_result"] is result.ice_result
-    assert harness.calls["EarlyWarningEngine"]["validation_result"] is result.validation_result
-    assert harness.calls["MarketRegimeEngine"]["flow_result"] is result.flow_result
+    assert result.decision_context.engine_results["signal_validation"] is result.validation_result
+    assert result.decision_context.engine_results["recommendation_stability"] is result.stability_result
+    assert result.decision_context.engine_results["false_breakout"] is result.false_breakout_result
+    assert result.decision_context.engine_results["institutional_confirmation"] is result.confirmation_result
     assert isinstance(harness.calls["DataHealthEngine"], MarketSnapshot)
     assert harness.calls["MarketCycleEngine"] is harness.calls["DataHealthEngine"]
     assert harness.calls["DataHealthEngine"].option_result is harness.option_result
