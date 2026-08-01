@@ -4,11 +4,12 @@ import pandas as pd
 import pytest
 
 import dashboard_application_service as service_module
+import itos_platform.decision_pipeline as pipeline_module
 from dashboard_application_service import (
     DashboardApplicationService,
     DashboardDataUnavailable,
 )
-from itos_platform import DecisionContext, MarketSnapshot
+from itos_platform.decision_context import DecisionContext, MarketSnapshot
 
 
 ENGINE_NAMES = [
@@ -178,7 +179,7 @@ def harness(monkeypatch):
         return Engine
 
     for name in ENGINE_NAMES:
-        monkeypatch.setattr(service_module, name, engine_class(name))
+        monkeypatch.setattr(pipeline_module, name, engine_class(name))
 
     ai_packages = []
 
@@ -300,19 +301,37 @@ def test_service_preserves_pipeline_outputs_session_keys_and_order(harness):
     assert harness.calls["MarketCycleEngine"] is result.market_snapshot
     assert harness.calls["DataHealthEngine"] is result.market_snapshot
     assert isinstance(harness.calls["RecommendationStabilityEngine"], DecisionContext)
-    assert harness.calls["RecommendationStabilityEngine"] is result.decision_context
-    assert harness.calls["PhaseTransitionEngine"] is result.decision_context
-    for institutional_engine in (
-        "InstitutionalRadarEngine", "InstitutionalDecisionMatrixEngine",
+    context_engine_order = (
+        "RecommendationStabilityEngine", "PhaseTransitionEngine",
+        "PatternRecognitionEngine", "InstitutionalRadarEngine", "CandleDNAEngine",
+        "SmartCandlestickEngine", "InstitutionalStructureEngine",
+        "FalseBreakoutEngine", "InstitutionalDecisionMatrixEngine",
         "InstitutionalFlowEngine", "InstitutionalConfidenceEngine",
-    ):
-        assert harness.calls[institutional_engine] is result.decision_context
-    for migrated_engine in (
-        "PatternRecognitionEngine", "CandleDNAEngine", "SmartCandlestickEngine",
-        "InstitutionalStructureEngine", "FalseBreakoutEngine", "EarlyWarningEngine",
-        "MarketRegimeEngine", "SmartMoneyIndexEngine", "MarketEnergyEngine",
-    ):
-        assert harness.calls[migrated_engine] is result.decision_context
+        "EarlyWarningEngine", "MarketRegimeEngine", "SmartMoneyIndexEngine",
+        "MarketEnergyEngine",
+    )
+    expected_prior_results = {
+        "RecommendationStabilityEngine": {"market_cycle"},
+        "PhaseTransitionEngine": {"market_cycle", "recommendation_stability"},
+        "PatternRecognitionEngine": {"market_cycle", "recommendation_stability", "phase_transition"},
+        "InstitutionalRadarEngine": {"market_cycle", "recommendation_stability", "phase_transition", "pattern_recognition", "trade_readiness"},
+        "CandleDNAEngine": {"market_cycle", "recommendation_stability", "phase_transition", "pattern_recognition", "trade_readiness", "institutional_radar", "market_story"},
+        "SmartCandlestickEngine": {"candle_dna"},
+        "InstitutionalStructureEngine": {"smart_candlestick"},
+        "FalseBreakoutEngine": {"institutional_structure", "institutional_footprint"},
+        "InstitutionalDecisionMatrixEngine": {"false_breakout", "institutional_confirmation"},
+        "InstitutionalFlowEngine": {"institutional_decision_matrix"},
+        "InstitutionalConfidenceEngine": {"institutional_flow"},
+        "EarlyWarningEngine": {"institutional_confidence", "signal_validation"},
+        "MarketRegimeEngine": {"early_warning"},
+        "SmartMoneyIndexEngine": {"market_regime"},
+        "MarketEnergyEngine": {"smart_money_index"},
+    }
+    contexts = [harness.calls[name] for name in context_engine_order]
+    assert len({id(context) for context in contexts}) == len(contexts)
+    for name, engine_context in zip(context_engine_order, contexts):
+        assert engine_context.market_snapshot is result.market_snapshot
+        assert expected_prior_results[name] <= set(engine_context.engine_results)
     assert result.decision_context.market_snapshot is result.market_snapshot
     assert result.decision_context.cycle_result is result.cycle_result
     assert result.decision_context.decision_history is result.decision_history
@@ -326,6 +345,7 @@ def test_service_preserves_pipeline_outputs_session_keys_and_order(harness):
     assert result.decision_context.engine_results["recommendation_stability"] is result.stability_result
     assert result.decision_context.engine_results["false_breakout"] is result.false_breakout_result
     assert result.decision_context.engine_results["institutional_confirmation"] is result.confirmation_result
+    assert result.pipeline_results.decision_context is result.decision_context
     assert isinstance(harness.calls["DataHealthEngine"], MarketSnapshot)
     assert harness.calls["MarketCycleEngine"] is harness.calls["DataHealthEngine"]
     assert harness.calls["DataHealthEngine"].option_result is harness.option_result
@@ -409,6 +429,29 @@ def test_critical_acquisition_failure_never_builds_or_emits_buy(harness, monkeyp
     assert "AITradeEngine" not in harness.events
 
 
+def test_critical_pipeline_failure_propagates_before_ai_or_persistence(harness):
+    class FailingPipeline:
+        def execute(self, context):
+            harness.events.append("pipeline_failure")
+            raise RuntimeError("critical engine failed")
+
+    service = DashboardApplicationService(
+        client_factory=harness.Client,
+        store_factory=harness.Store,
+        pipeline_factory=FailingPipeline,
+    )
+    with pytest.raises(RuntimeError, match="critical engine failed"):
+        service.execute(
+            token="token", instrument_key="NSE|TEST", underlying="TEST",
+            expiry="2026-08-06", timeframe=5, strikes=8,
+            save_snapshots=True, history_hours=8, should_load=True,
+            session_state={},
+        )
+
+    assert "AITradeEngine" not in harness.events
+    assert "save_phase_history" not in harness.events
+
+
 def test_incomplete_cached_data_never_builds_or_emits_buy(harness):
     with pytest.raises(DashboardDataUnavailable):
         _execute(harness, should_load=False, state={"option_result": harness.option_result})
@@ -422,6 +465,7 @@ def test_unavailable_candles_force_safe_wait_and_unhealthy_data(harness, monkeyp
     from engines.data_health_engine import DataHealthEngine as RealDataHealthEngine
 
     monkeypatch.setattr(service_module, "DataHealthEngine", RealDataHealthEngine)
+    monkeypatch.setattr(pipeline_module, "DataHealthEngine", RealDataHealthEngine)
 
     class EmptyCandleClient(harness.Client):
         def get_intraday_candles(self, *args, **kwargs):

@@ -1,9 +1,10 @@
 # Self Review
 
-- Confirmed all four scoped engines retain legacy mapping entry points.
-- Confirmed each engine has one private adapter and no duplicated scoring implementation.
-- Confirmed the dashboard passes the identical `DecisionContext` instance to all four migrated engines.
-- Confirmed result registration occurs in the original execution sequence.
-- Confirmed snapshots contain no recommendation, engine result, history, or repository state.
-- Added neutral malformed-input coverage and a blocked-recommendation early-warning assertion.
-- Limited validation to the commands authorized by the sprint.
+- **Architecture assessment:** The I/O-free pipeline and frozen result contract establish the requested boundary without moving engine calculations.
+- **Behaviour-preservation assessment:** Order, engine inputs, recommendation metadata updates, gate wording, and persistence sequence are retained. Data-health blocking now makes explicit the existing engine safety metadata.
+- **Backward-compatibility assessment:** Existing dashboard fields, `ice_result`/`smi_result` names, session keys, engine adapters, and AI inputs remain available.
+- **Safety assessment:** Veto application is centralized and monotonic; malformed recommendation and unhealthy data degrade to WAIT. Exceptions fail closed before AI packaging.
+- **Test gaps:** Codex did not execute pytest. Full local validation and representative production CE/PE golden fixtures remain required.
+- **Temporary technical debt:** Mutable `DecisionContext.engine_results`, dynamic dashboard mapping, and recommendation table alignment inside orchestration remain during migration.
+- **Known assumptions:** Engine metadata schemas and gate values retain their current meanings; `AITradeEngine` receives no triggered trade plan in this service path.
+- **Confidence level:** 8/10, pending the mandatory local full-suite run.
