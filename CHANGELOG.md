@@ -1,5 +1,11 @@
 # Changelog
 
+## Sprint 7 - Market State & Early Warning Migration
+
+- Migrated Market Regime, Smart Money Index, Market Energy, and Early Warning engines to prefer the canonical `DecisionContext` while retaining legacy mapping inputs.
+- Wired the dashboard's single decision context through all four engines without changing their execution order.
+- Added typed/legacy parity, malformed-input degradation, cached pipeline characterization, and blocked-recommendation safety coverage.
+
 ## Unreleased
 - Migrated the institutional radar, flow, confidence, and decision-matrix engines to prefer the canonical `DecisionContext` while retaining legacy mapping compatibility and unchanged scoring behavior.
 - Extended dashboard orchestration to reuse one decision context across all four institutional engines and to carry decision/strike histories outside `MarketSnapshot`.

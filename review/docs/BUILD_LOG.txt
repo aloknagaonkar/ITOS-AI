@@ -1,7 +1,5 @@
-Sprint 6 validation build log
-
-$ python -m py_compile dashboard_application_service.py engines/institutional_flow.py engines/institutional_intelligence.py engines/trade_planner.py itos_platform/decision_context.py review/source/dashboard_application_service.py review/source/engines/institutional_flow.py review/source/engines/institutional_intelligence.py review/source/engines/trade_planner.py review/source/itos_platform/decision_context.py review/source/tests/test_dashboard_application_service.py review/source/tests/test_institutional_flow_context.py tests/test_dashboard_application_service.py tests/test_institutional_flow_context.py
-[exit code: 0]
+$ python -m py_compile engines/core_intelligence.py engines/institutional_flow.py tests/test_market_state_context.py
+Result: PASS (exit 0)
 
 $ git diff --check
-[exit code: 0]
+Result: PASS (exit 0)

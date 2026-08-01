@@ -2,16 +2,19 @@
 
 ## Codex validation
 
-- `python -m py_compile` was executed for every modified Python file and completed successfully.
-- `git diff --check` completed successfully.
-- **pytest was not executed by Codex**, as explicitly required by the sprint validation instructions.
+The malformed-input follow-up was validated only with the sprint-authorized commands recorded in `BUILD_LOG.txt`:
 
-## Required before merge
+- `python -m py_compile engines/core_intelligence.py engines/institutional_flow.py tests/test_market_state_context.py`
+- `git diff --check`
+
+## Pytest
+
+Pytest was **not executed by Codex**, as required.
 
 Local full-suite validation is required before merge:
 
-```text
+```bash
 python -m pytest -q
 ```
 
-No claim is made that the automated test suite passes until that local run is completed.
+The expanded characterization cases cover non-mapping intelligence, price, option result, summary, recommendation, and result metadata values while retaining valid typed/legacy parity assertions.
