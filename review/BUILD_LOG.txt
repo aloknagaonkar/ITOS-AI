@@ -1,0 +1,35 @@
+$ python -m py_compile dashboard_application_service.py engines/stability_engine.py engines/data_health_engine.py itos_platform/decision_context.py itos_platform/__init__.py tests/test_dashboard_application_service.py tests/test_stability_typed_context.py
+[exit: 0]
+
+$ git diff --check
+[exit: 0]
+
+$ python -m pytest -q
+
+==================================== ERRORS ====================================
+_________ ERROR collecting tests/test_dashboard_application_service.py _________
+ImportError while importing test module '/workspace/ITOS-AI/tests/test_dashboard_application_service.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/root/.pyenv/versions/3.14.4/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_dashboard_application_service.py:3: in <module>
+    import pandas as pd
+E   ModuleNotFoundError: No module named 'pandas'
+____________ ERROR collecting tests/test_stability_typed_context.py ____________
+ImportError while importing test module '/workspace/ITOS-AI/tests/test_stability_typed_context.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/root/.pyenv/versions/3.14.4/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_stability_typed_context.py:3: in <module>
+    import pandas as pd
+E   ModuleNotFoundError: No module named 'pandas'
+=========================== short test summary info ============================
+ERROR tests/test_dashboard_application_service.py
+ERROR tests/test_stability_typed_context.py
+!!!!!!!!!!!!!!!!!!! Interrupted: 2 errors during collection !!!!!!!!!!!!!!!!!!!!
+2 errors in 0.27s
+[exit: 2]

@@ -282,7 +282,13 @@ def test_service_preserves_pipeline_outputs_session_keys_and_order(harness):
     assert result.cycle_meta is result.cycle_result.metadata
     assert result.stability_meta is result.stability_result.metadata
 
-    assert harness.calls["RecommendationStabilityEngine"]["cycle_result"] is result.cycle_result
+    assert harness.calls["RecommendationStabilityEngine"].cycle_result is result.cycle_result
+    assert isinstance(result.market_snapshot, MarketSnapshot)
+    assert harness.calls["MarketCycleEngine"] is result.market_snapshot
+    assert harness.calls["DataHealthEngine"] is result.market_snapshot
+    assert isinstance(harness.calls["RecommendationStabilityEngine"], DecisionContext)
+    assert harness.calls["RecommendationStabilityEngine"] is result.decision_context
+    assert result.decision_context.market_snapshot is result.market_snapshot
     assert harness.calls["InstitutionalFlowEngine"]["recommendation"] is result.recommendation
     assert harness.calls["InstitutionalConfidenceEngine"]["flow_result"] is result.flow_result
     assert harness.calls["SignalValidationEngine"]["ice_result"] is result.ice_result

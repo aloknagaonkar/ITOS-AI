@@ -152,10 +152,15 @@ class DashboardApplicationService:
         engine_expiry = session_state.get("expiry", expiry)
         prior_confidence_history = engine_store.get_confidence_history(engine_underlying, engine_expiry, hours=history_hours)
         prior_phase_history = engine_store.get_phase_history(engine_underlying, engine_expiry, hours=history_hours)
-        stability_result = RecommendationStabilityEngine(minimum_stability=70.0).analyze({
-            "recommendation": recommendation, "confidence_history": prior_confidence_history,
-            "phase_history": prior_phase_history, "cycle_result": cycle_result,
-        })
+        decision_context = DecisionContext(
+            market_snapshot=market_snapshot,
+            recommendation=recommendation,
+            cycle_result=cycle_result,
+            confidence_history=prior_confidence_history,
+            phase_history=prior_phase_history,
+            runtime={"minimum_stability": 70.0, "history_hours": history_hours},
+        )
+        stability_result = RecommendationStabilityEngine(minimum_stability=70.0).analyze(decision_context)
         transition_result = PhaseTransitionEngine().analyze({"cycle_result": cycle_result})
         pattern_result = PatternRecognitionEngine().analyze({"recommendation": recommendation, "option_result": option_result, "intelligence": intelligence, "institutional": institutional, "cycle_result": cycle_result})
         readiness_result = TradeReadinessEngine().analyze({"recommendation": recommendation, "cycle_result": cycle_result, "stability_result": stability_result, "pattern_result": pattern_result})

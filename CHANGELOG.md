@@ -24,3 +24,9 @@
 - Added modular AI Trade Opportunity decision center below Key Market Levels.
 - Added trade dataclasses, Explainable AI engine, AI Trade orchestrator and reusable UI renderer.
 - Preserved existing engine logic and detailed dashboard panels.
+# Sprint 3 - Typed Recommendation Stability Context
+
+- Added canonical point-in-time `MarketSnapshot` and decision-layer `DecisionContext` contracts.
+- Migrated `RecommendationStabilityEngine` to prefer `DecisionContext` while retaining legacy dictionary input through a boundary adapter.
+- Updated dashboard orchestration to reuse one snapshot for market-cycle and data-health analysis and one context for recommendation stability.
+- Added typed/legacy parity and application-service identity characterization tests.
