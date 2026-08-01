@@ -85,6 +85,9 @@ class DecisionContext:
     session_state: Mapping[str, Any] = field(default_factory=dict)
     runtime_settings: Mapping[str, Any] = field(default_factory=dict)
     institutional: Mapping[str, Any] | None = None
+    decision_history: Any = None
+    strike_history: Any = None
+    stability_history: Any = None
 
     def __post_init__(self) -> None:
         """Reconcile canonical fields with Sprint 2 constructor aliases."""

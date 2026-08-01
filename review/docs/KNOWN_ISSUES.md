@@ -1,5 +1,4 @@
 # Known Issues
 
-- The requested targeted pytest command cannot collect because pandas is not installed in the Codex environment (`ModuleNotFoundError: No module named 'pandas'`). No tests executed in this environment.
-- The user-provided external run reported 78 passing tests and isolated the malformed recommendation failure addressed by this fix; that external result was not re-run or claimed as local validation.
-- Full repository validation was intentionally not performed or claimed; it remains a manual pre-merge activity.
+- The full pytest suite has not been run in the Codex environment and requires local validation before merge.
+- `DecisionContext.engine_results` is intentionally a mutable mapping inside a frozen dataclass so the ordered pipeline can publish results without replacing the canonical context instance. This preserves the established migration architecture.

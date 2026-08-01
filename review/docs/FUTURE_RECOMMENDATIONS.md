@@ -1,5 +1,5 @@
 # Future Recommendations
 
-- Migrate remaining dictionary-only engines in their designated sprints rather than expanding Sprint 5.
-- Once migration completes, introduce a typed engine-result registry while preserving compatibility at system boundaries.
-- Evaluate deeply immutable mapping containers only after auditing existing recommendation and result mutation patterns.
+No unrelated recommendations were implemented during Sprint 6.
+
+For a future sprint, consider consolidating repeated construction of the warming-up flow metadata behind a helper and formalizing names for every `engine_results` registry key. These changes are deliberately deferred because they are outside this sprint and could broaden the compatibility surface.

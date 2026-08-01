@@ -159,6 +159,8 @@ class DashboardApplicationService:
             engine_results={"market_cycle": cycle_result},
             confidence_history=prior_confidence_history,
             phase_history=prior_phase_history,
+            decision_history=decision_history,
+            strike_history=decision_strike_history,
             runtime_configuration={
                 "minimum_stability": 70.0,
                 "history_hours": history_hours,
@@ -169,7 +171,8 @@ class DashboardApplicationService:
         pattern_result = PatternRecognitionEngine().analyze(decision_context)
         decision_context.engine_results["pattern_recognition"] = pattern_result
         readiness_result = TradeReadinessEngine().analyze({"recommendation": recommendation, "cycle_result": cycle_result, "stability_result": stability_result, "pattern_result": pattern_result})
-        radar_result = InstitutionalRadarEngine().analyze({"recommendation": recommendation, "option_result": option_result, "intelligence": intelligence, "institutional": institutional})
+        radar_result = InstitutionalRadarEngine().analyze(decision_context)
+        decision_context.engine_results["institutional_radar"] = radar_result
         story_result = MarketStoryEngine().analyze({"recommendation": recommendation, "cycle_result": cycle_result, "transition_result": transition_result, "readiness_result": readiness_result, "radar_result": radar_result, "pattern_result": pattern_result})
         candle_dna_result = CandleDNAEngine().analyze(decision_context)
         decision_context.engine_results["candle_dna"] = candle_dna_result
@@ -182,6 +185,7 @@ class DashboardApplicationService:
         false_breakout_result = FalseBreakoutEngine().analyze(decision_context)
         decision_context.engine_results["false_breakout"] = false_breakout_result
         confirmation_result = InstitutionalConfirmationEngine().analyze({"recommendation": recommendation, "footprint_result": footprint_result, "structure_result": structure_result, "smart_candle_result": smart_candle_result, "candle_dna_result": candle_dna_result, "pattern_result": pattern_result, "cycle_result": cycle_result, "false_breakout_result": false_breakout_result})
+        decision_context.engine_results["institutional_confirmation"] = confirmation_result
         metadata = {
             "phase_transition": transition_result, "patterns": pattern_result,
             "trade_readiness_v71": readiness_result, "institutional_radar": radar_result,
@@ -191,7 +195,8 @@ class DashboardApplicationService:
             "institutional_confirmation": confirmation_result,
         }
         recommendation.update({key: result.metadata for key, result in metadata.items()})
-        decision_matrix_result = InstitutionalDecisionMatrixEngine().analyze({"recommendation": recommendation, "intelligence": intelligence, "cycle_result": cycle_result, "footprint_result": footprint_result, "confirmation_result": confirmation_result, "candle_dna_result": candle_dna_result, "pattern_result": pattern_result, "false_breakout_result": false_breakout_result})
+        decision_matrix_result = InstitutionalDecisionMatrixEngine().analyze(decision_context)
+        decision_context.engine_results["institutional_decision_matrix"] = decision_matrix_result
         cycle_meta, stability_meta = cycle_result.metadata, stability_result.metadata
         recommendation["market_cycle"] = cycle_meta
         recommendation["stability"] = stability_meta
@@ -213,8 +218,10 @@ class DashboardApplicationService:
             recommendation["status"] = f"WATCH {recommendation['side']} — INSTITUTIONAL CONFIRMATION {confirmation_result.metadata.get('status', 'DEVELOPING')}"
             recommendation["blockers"] = list(dict.fromkeys(recommendation.get("blockers", []) + [f"Institutional confirmation is {confirmation_result.score:.0f}/100"]))
         self._align_top_five(recommendation)
-        flow_result = InstitutionalFlowEngine().analyze({"history": decision_history, "strike_history": decision_strike_history, "recommendation": recommendation, "option_result": option_result})
-        ice_result = InstitutionalConfidenceEngine().analyze({"recommendation": recommendation, "flow_result": flow_result, "confirmation_result": confirmation_result, "cycle_result": cycle_result, "candle_dna_result": candle_dna_result, "pattern_result": pattern_result, "decision_matrix_result": decision_matrix_result})
+        flow_result = InstitutionalFlowEngine().analyze(decision_context)
+        decision_context.engine_results["institutional_flow"] = flow_result
+        ice_result = InstitutionalConfidenceEngine().analyze(decision_context)
+        decision_context.engine_results["institutional_confidence"] = ice_result
         validation_result = SignalValidationEngine().analyze({"recommendation": recommendation, "flow_result": flow_result, "ice_result": ice_result, "confirmation_result": confirmation_result, "false_breakout_result": false_breakout_result, "stability_result": stability_result})
         early_warning_result = EarlyWarningEngine().analyze({"recommendation": recommendation, "flow_result": flow_result, "ice_result": ice_result, "validation_result": validation_result})
         recommendation.update({"institutional_flow_v77": flow_result.metadata, "institutional_confidence_v77": ice_result.metadata, "signal_validation_v77": validation_result.metadata, "early_warning_v77": early_warning_result.metadata})
