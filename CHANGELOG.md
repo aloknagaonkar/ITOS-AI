@@ -35,3 +35,9 @@
 - Migrated `RecommendationStabilityEngine` to prefer `DecisionContext` while retaining legacy dictionary input through a boundary adapter.
 - Updated dashboard orchestration to reuse one snapshot for market-cycle and data-health analysis and one context for recommendation stability.
 - Added typed/legacy parity and application-service identity characterization tests.
+
+# Sprint 5 - Structure Intelligence Migration
+
+- Migrated Pattern Recognition, Candle DNA, Smart Candlestick, Institutional Structure, and False Breakout engines to prefer `DecisionContext` while retaining legacy dictionary calls.
+- Reused the dashboard's canonical `MarketSnapshot` and `DecisionContext` across the migrated structure-intelligence pipeline without changing engine order or safety gates.
+- Added typed-versus-legacy parity coverage, malformed/missing-data degradation checks, context identity characterization, and false-breakout safety parity.
