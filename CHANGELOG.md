@@ -1,5 +1,13 @@
 # Changelog
 
+## Sprint 8 - Decision Pipeline & Safety Gate Foundation
+
+- Introduced a repository-free `DecisionPipeline` that preserves the characterized engine order and shared `DecisionContext`.
+- Added the frozen, named `PipelineResults` output contract and an application-layer compatibility mapping for existing dashboard field names.
+- Centralized the existing cycle, stability, false-breakout, confirmation, validation, and data-health veto enforcement in a monotonic `SafetyGatePolicy`.
+- Updated `DashboardApplicationService` to delegate engine orchestration while retaining acquisition, persistence, AI trade packaging, and its existing result contract.
+- Added behavioural parity, context identity, cached execution, failure-safety, safety monotonicity, and dashboard smoke-contract coverage.
+
 ## Sprint 7 - Market State & Early Warning Migration
 
 - Migrated Market Regime, Smart Money Index, Market Energy, and Early Warning engines to prefer the canonical `DecisionContext` while retaining legacy mapping inputs.
