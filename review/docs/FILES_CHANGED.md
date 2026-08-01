@@ -1,19 +1,17 @@
-# Circular-Import Fix Files Changed
+# Decision Context Propagation Fix — Files Changed
 
 | File | Reason changed | Architectural impact | Backward-compatibility impact |
 |---|---|---|---|
-| `itos_platform/__init__.py` | Remove eager high-level imports | Restores low-level package boundary and breaks engine/package cycle | Newly introduced Sprint 8 root exports are removed; direct module imports remain public |
-| `itos_platform/decision_pipeline.py` | Import concrete engine modules | Prevents re-entry through the `engines` barrel | Engine classes, order, inputs, and results are unchanged |
-| `dashboard_application_service.py` | Import contracts and pipeline directly | Makes dependency direction explicit | Service API and dashboard result are unchanged |
-| `tests/test_dashboard_application_service.py` | Import context contracts directly | Exercises supported boundary | Test behaviour unchanged |
-| `tests/test_decision_pipeline.py` | Import high-level types directly and add fresh-process regression test | Guards package initialization order | No production compatibility impact |
-| `review/docs/ARCHITECTURE_NOTES.md` | Document dependency-boundary correction | Records rationale and avoided alternatives | None |
-| `review/docs/BUILD_LOG.txt` | Capture required validation output | Audit evidence | None |
-| `review/docs/TEST_REPORT.md` | Record import regression coverage and pytest status | Audit documentation | None |
-| `review/docs/KNOWN_ISSUES.md` | Document intentional direct-import API | Makes root-export limitation explicit | Guides callers to supported imports |
-| `review/docs/FILES_CHANGED.md` | Inventory every fix file | Review documentation | None |
-| `review/source/itos_platform/__init__.py` | Review copy of modified package root | Review artifact | None |
+| `itos_platform/decision_pipeline.py` | Advance context after each engine with `dataclasses.replace()` and return the final context | Preserves immutable state while exposing completed results downstream | Engine order, inputs, calculations, and named dashboard mapping remain unchanged |
+| `dashboard_application_service.py` | Adopt the pipeline's final accumulated context | Dashboard result now exposes the context actually completed by the pipeline | Existing `decision_context` result field remains present |
+| `tests/test_dashboard_application_service.py` | Characterize per-stage populated contexts | Verifies every context-aware engine sees prior results and the canonical snapshot | Updates identity assertions for immutable replacements |
+| `tests/test_decision_pipeline.py` | Supply and exclude the new final-context contract field in wiring assertions | Covers typed final context without treating it as an engine result | Existing result aliases remain unchanged |
+| `review/docs/ARCHITECTURE_NOTES.md` | Explain immutable propagation design | Documents replacement semantics | None |
+| `review/docs/BUILD_LOG.txt` | Capture permitted validation | Audit evidence | None |
+| `review/docs/TEST_REPORT.md` | Record new characterization and pytest status | Audit documentation | None |
+| `review/docs/KNOWN_ISSUES.md` | Record shallow immutable-boundary assumption | Documents provider-native reference behavior | None |
+| `review/docs/FILES_CHANGED.md` | Inventory every modified fix file | Review documentation | None |
 | `review/source/itos_platform/decision_pipeline.py` | Review copy of modified pipeline | Review artifact | None |
 | `review/source/dashboard_application_service.py` | Review copy of modified service | Review artifact | None |
-| `review/source/tests/test_dashboard_application_service.py` | Review copy of modified service test | Review artifact | None |
-| `review/source/tests/test_decision_pipeline.py` | Review copy of modified pipeline/import test | Review artifact | None |
+| `review/source/tests/test_dashboard_application_service.py` | Review copy of modified characterization test | Review artifact | None |
+| `review/source/tests/test_decision_pipeline.py` | Review copy of modified result-contract test | Review artifact | None |

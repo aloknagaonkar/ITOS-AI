@@ -2,11 +2,11 @@
 
 ## Codex validation
 
-- The required targeted `python -m py_compile` command was executed for the circular-import correction.
+- The required `python -m py_compile` syntax validation was executed for all Python files modified by the state-propagation correction.
 - `git diff --check` was executed as the required patch whitespace validation.
 - **pytest not executed by Codex.**
 - **Full local validation is required before merge:** `python -m pytest -q`.
 
 ## Behavioural coverage added or retained
 
-The tests characterize engine order, result wiring, canonical snapshot/context identity, cached execution without acquisition or writes, existing false-breakout and validation vetoes, missing candles, acquisition/pipeline failure propagation without an AI BUY, malformed critical input, unhealthy data, dashboard result compatibility, and typed/legacy output aliases. A fresh-process import-boundary test now imports `engines`, `itos_platform`, `itos_platform.decision_pipeline`, and `dashboard_application_service` in the failure-producing order so the collection-time circular import cannot regress unnoticed. The full local suite remains the acceptance gate.
+The application-service characterization now verifies that every context-aware engine receives a distinct immutable `DecisionContext`, that every such context retains the canonical `MarketSnapshot`, and that its `engine_results` contains the expected results from all earlier stages. It specifically verifies that Recommendation Stability receives the completed Market Cycle result and that the final context contains all named outputs. Existing coverage continues to characterize engine order, result wiring, cached execution, safety vetoes, failure propagation, dashboard compatibility, typed aliases, and fresh-process import boundaries. The full local suite remains the acceptance gate.

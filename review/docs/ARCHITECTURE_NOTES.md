@@ -23,3 +23,7 @@ Critical engine exceptions continue to propagate, matching the prior orchestrati
 ## Import boundary correction
 
 The package root deliberately exports only low-level provider and decision-context contracts. It does not initialize `DecisionPipeline` or `SafetyGatePolicy`, because the pipeline imports concrete engine modules and therefore belongs above both the platform-contract and engine package initialization boundaries. Application and test consumers import orchestration and policy types directly from their defining modules. The pipeline likewise imports engines from their concrete modules rather than the `engines` barrel. This keeps dependency direction acyclic without lazy imports, exception suppression, or runtime import tricks.
+
+## Immutable state propagation correction
+
+`DecisionPipeline` advances decision state with `dataclasses.replace()` after every completed engine. Each replacement receives a newly copied `engine_results` mapping plus the applicable typed `DecisionContext` result alias. Downstream engines therefore observe all prior results without mutating the frozen context or canonical `MarketSnapshot`. `PipelineResults.decision_context` exposes the final accumulated context to the application service while `dashboard_values()` continues to map only the pre-existing engine-result fields.

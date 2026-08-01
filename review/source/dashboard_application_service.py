@@ -186,6 +186,7 @@ class DashboardApplicationService:
             },
         )
         pipeline_results = self.pipeline_factory().execute(decision_context)
+        decision_context = pipeline_results.decision_context
         pipeline_values = pipeline_results.dashboard_values()
         cycle_result = pipeline_results.cycle_result
         stability_result = pipeline_results.stability_result

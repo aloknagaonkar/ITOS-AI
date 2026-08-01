@@ -34,11 +34,17 @@ def _result(**metadata):
 
 def test_pipeline_results_legacy_mapping_is_named_and_authoritative():
     result_objects = [_result() for _ in range(22)]
+    context = DecisionContext(
+        market_snapshot=MarketSnapshot(option_result={}, intelligence={})
+    )
     decision = SimpleNamespace(trade_allowed=True, final_state="BUY", blockers=(), reasons=())
-    results = PipelineResults(*result_objects, decision)
+    results = PipelineResults(*result_objects, context, decision)
 
     mapping = results.dashboard_values()
-    named_fields = [field.name for field in fields(PipelineResults) if field.name != "safety_decision"]
+    named_fields = [
+        field.name for field in fields(PipelineResults)
+        if field.name not in {"decision_context", "safety_decision"}
+    ]
     for index, name in enumerate(named_fields):
         assert getattr(results, name) is result_objects[index]
         assert mapping[name] is result_objects[index]

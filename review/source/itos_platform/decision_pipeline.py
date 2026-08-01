@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, fields, replace
 from typing import Any
 
 import pandas as pd
@@ -55,6 +55,7 @@ class PipelineResults:
     smart_money_result: Any
     energy_result: Any
     data_health_result: Any
+    decision_context: DecisionContext
     safety_decision: SafetyDecision
 
     @property
@@ -67,7 +68,11 @@ class PipelineResults:
 
     def dashboard_values(self) -> dict[str, Any]:
         """Return the temporary legacy-name mapping used by the application layer."""
-        values = {item.name: getattr(self, item.name) for item in fields(self) if item.name != "safety_decision"}
+        values = {
+            item.name: getattr(self, item.name)
+            for item in fields(self)
+            if item.name not in {"decision_context", "safety_decision"}
+        }
         values.update(ice_result=self.ice_result, smi_result=self.smi_result)
         return values
 
@@ -92,41 +97,111 @@ class DecisionPipeline:
     def execute(self, context: DecisionContext) -> PipelineResults:
         recommendation = context.recommendation
         snapshot = context.market_snapshot
-        store = context.engine_results
 
-        cycle_result = MarketCycleEngine(institutional_compatibility=context.institutional).analyze(snapshot); store["market_cycle"] = cycle_result
-        stability_result = RecommendationStabilityEngine(minimum_stability=70.0).analyze(context); store["recommendation_stability"] = stability_result
+        cycle_result = MarketCycleEngine(
+            institutional_compatibility=context.institutional
+        ).analyze(snapshot)
+        context = self._with_result(
+            context, "market_cycle", cycle_result, cycle_result=cycle_result
+        )
+        stability_result = RecommendationStabilityEngine(
+            minimum_stability=70.0
+        ).analyze(context)
+        context = self._with_result(
+            context,
+            "recommendation_stability",
+            stability_result,
+            stability_result=stability_result,
+        )
         transition_result = PhaseTransitionEngine().analyze(context)
-        pattern_result = PatternRecognitionEngine().analyze(context); store["pattern_recognition"] = pattern_result
+        context = self._with_result(context, "phase_transition", transition_result)
+        pattern_result = PatternRecognitionEngine().analyze(context)
+        context = self._with_result(context, "pattern_recognition", pattern_result)
         readiness_result = TradeReadinessEngine().analyze({"recommendation": recommendation, "cycle_result": cycle_result, "stability_result": stability_result, "pattern_result": pattern_result})
-        radar_result = InstitutionalRadarEngine().analyze(context); store["institutional_radar"] = radar_result
+        context = self._with_result(context, "trade_readiness", readiness_result)
+        radar_result = InstitutionalRadarEngine().analyze(context)
+        context = self._with_result(context, "institutional_radar", radar_result)
         story_result = MarketStoryEngine().analyze({"recommendation": recommendation, "cycle_result": cycle_result, "transition_result": transition_result, "readiness_result": readiness_result, "radar_result": radar_result, "pattern_result": pattern_result})
-        candle_dna_result = CandleDNAEngine().analyze(context); store["candle_dna"] = candle_dna_result
-        smart_candle_result = SmartCandlestickEngine().analyze(context); store["smart_candlestick"] = smart_candle_result
-        structure_result = InstitutionalStructureEngine().analyze(context); store["institutional_structure"] = structure_result
-        footprint_result = InstitutionalFootprintEngine().analyze({"option_result": snapshot.option_result, "intelligence": snapshot.intelligence, "institutional": context.institutional, "cycle_result": cycle_result}); store["institutional_footprint"] = footprint_result
-        false_breakout_result = FalseBreakoutEngine().analyze(context); store["false_breakout"] = false_breakout_result
-        confirmation_result = InstitutionalConfirmationEngine().analyze({"recommendation": recommendation, "footprint_result": footprint_result, "structure_result": structure_result, "smart_candle_result": smart_candle_result, "candle_dna_result": candle_dna_result, "pattern_result": pattern_result, "cycle_result": cycle_result, "false_breakout_result": false_breakout_result}); store["institutional_confirmation"] = confirmation_result
+        context = self._with_result(context, "market_story", story_result)
+        candle_dna_result = CandleDNAEngine().analyze(context)
+        context = self._with_result(context, "candle_dna", candle_dna_result)
+        smart_candle_result = SmartCandlestickEngine().analyze(context)
+        context = self._with_result(context, "smart_candlestick", smart_candle_result)
+        structure_result = InstitutionalStructureEngine().analyze(context)
+        context = self._with_result(
+            context, "institutional_structure", structure_result
+        )
+        footprint_result = InstitutionalFootprintEngine().analyze({"option_result": snapshot.option_result, "intelligence": snapshot.intelligence, "institutional": context.institutional, "cycle_result": cycle_result})
+        context = self._with_result(
+            context, "institutional_footprint", footprint_result
+        )
+        false_breakout_result = FalseBreakoutEngine().analyze(context)
+        context = self._with_result(
+            context,
+            "false_breakout",
+            false_breakout_result,
+            false_breakout_result=false_breakout_result,
+        )
+        confirmation_result = InstitutionalConfirmationEngine().analyze({"recommendation": recommendation, "footprint_result": footprint_result, "structure_result": structure_result, "smart_candle_result": smart_candle_result, "candle_dna_result": candle_dna_result, "pattern_result": pattern_result, "cycle_result": cycle_result, "false_breakout_result": false_breakout_result})
+        context = self._with_result(
+            context,
+            "institutional_confirmation",
+            confirmation_result,
+            confirmation_result=confirmation_result,
+        )
         metadata = {"phase_transition": transition_result, "patterns": pattern_result, "trade_readiness_v71": readiness_result, "institutional_radar": radar_result, "market_story": story_result, "candle_dna": candle_dna_result, "smart_candles": smart_candle_result, "institutional_structures": structure_result, "institutional_footprint": footprint_result, "false_breakout": false_breakout_result, "institutional_confirmation": confirmation_result}
         recommendation.update({key: result.metadata for key, result in metadata.items()})
-        decision_matrix_result = InstitutionalDecisionMatrixEngine().analyze(context); store["institutional_decision_matrix"] = decision_matrix_result
+        decision_matrix_result = InstitutionalDecisionMatrixEngine().analyze(context)
+        context = self._with_result(
+            context, "institutional_decision_matrix", decision_matrix_result
+        )
         recommendation["market_cycle"] = cycle_result.metadata; recommendation["stability"] = stability_result.metadata
         self.safety_policy.enforce(recommendation, cycle_result=cycle_result, stability_result=stability_result, false_breakout_result=false_breakout_result, confirmation_result=confirmation_result)
         self._align_top_five(recommendation)
-        flow_result = InstitutionalFlowEngine().analyze(context); store["institutional_flow"] = flow_result
-        institutional_confidence_result = InstitutionalConfidenceEngine().analyze(context); store["institutional_confidence"] = institutional_confidence_result
-        validation_result = SignalValidationEngine().analyze({"recommendation": recommendation, "flow_result": flow_result, "ice_result": institutional_confidence_result, "confirmation_result": confirmation_result, "false_breakout_result": false_breakout_result, "stability_result": stability_result}); store["signal_validation"] = validation_result
-        early_warning_result = EarlyWarningEngine().analyze(context); store["early_warning"] = early_warning_result
+        flow_result = InstitutionalFlowEngine().analyze(context)
+        context = self._with_result(
+            context, "institutional_flow", flow_result, flow_result=flow_result
+        )
+        institutional_confidence_result = InstitutionalConfidenceEngine().analyze(context)
+        context = self._with_result(
+            context,
+            "institutional_confidence",
+            institutional_confidence_result,
+            institutional_confidence_result=institutional_confidence_result,
+        )
+        validation_result = SignalValidationEngine().analyze({"recommendation": recommendation, "flow_result": flow_result, "ice_result": institutional_confidence_result, "confirmation_result": confirmation_result, "false_breakout_result": false_breakout_result, "stability_result": stability_result})
+        context = self._with_result(
+            context,
+            "signal_validation",
+            validation_result,
+            validation_result=validation_result,
+        )
+        early_warning_result = EarlyWarningEngine().analyze(context)
+        context = self._with_result(context, "early_warning", early_warning_result)
         recommendation.update({"institutional_flow_v77": flow_result.metadata, "institutional_confidence_v77": institutional_confidence_result.metadata, "signal_validation_v77": validation_result.metadata, "early_warning_v77": early_warning_result.metadata})
-        regime_result = MarketRegimeEngine().analyze(context); store["market_regime"] = regime_result
-        smart_money_result = SmartMoneyIndexEngine().analyze(context); store["smart_money_index"] = smart_money_result
-        energy_result = MarketEnergyEngine().analyze(context); store["market_energy"] = energy_result
+        regime_result = MarketRegimeEngine().analyze(context)
+        context = self._with_result(context, "market_regime", regime_result)
+        smart_money_result = SmartMoneyIndexEngine().analyze(context)
+        context = self._with_result(context, "smart_money_index", smart_money_result)
+        energy_result = MarketEnergyEngine().analyze(context)
+        context = self._with_result(context, "market_energy", energy_result)
         recommendation.update({"market_regime_v80": regime_result.metadata, "smart_money_index_v80": smart_money_result.metadata, "market_energy_v80": energy_result.metadata})
         self.safety_policy.enforce(recommendation, validation_result=validation_result)
         self._align_top_five(recommendation)
-        data_health_result = DataHealthEngine().analyze(snapshot); store["data_health"] = data_health_result
+        data_health_result = DataHealthEngine().analyze(snapshot)
+        context = self._with_result(context, "data_health", data_health_result)
         safety_decision = self.safety_policy.enforce(recommendation, data_health_result=data_health_result)
-        return PipelineResults(cycle_result, stability_result, transition_result, pattern_result, readiness_result, radar_result, story_result, candle_dna_result, smart_candle_result, structure_result, footprint_result, false_breakout_result, confirmation_result, decision_matrix_result, flow_result, institutional_confidence_result, validation_result, early_warning_result, regime_result, smart_money_result, energy_result, data_health_result, safety_decision)
+        return PipelineResults(cycle_result, stability_result, transition_result, pattern_result, readiness_result, radar_result, story_result, candle_dna_result, smart_candle_result, structure_result, footprint_result, false_breakout_result, confirmation_result, decision_matrix_result, flow_result, institutional_confidence_result, validation_result, early_warning_result, regime_result, smart_money_result, energy_result, data_health_result, context, safety_decision)
+
+    @staticmethod
+    def _with_result(
+        context: DecisionContext, result_name: str, result: Any, **updates: Any
+    ) -> DecisionContext:
+        """Return a new context containing the completed engine result."""
+
+        engine_results = dict(context.engine_results)
+        engine_results[result_name] = result
+        return replace(context, engine_results=engine_results, **updates)
 
     @staticmethod
     def _align_top_five(recommendation: dict[str, Any]) -> None:

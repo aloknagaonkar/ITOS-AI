@@ -301,19 +301,37 @@ def test_service_preserves_pipeline_outputs_session_keys_and_order(harness):
     assert harness.calls["MarketCycleEngine"] is result.market_snapshot
     assert harness.calls["DataHealthEngine"] is result.market_snapshot
     assert isinstance(harness.calls["RecommendationStabilityEngine"], DecisionContext)
-    assert harness.calls["RecommendationStabilityEngine"] is result.decision_context
-    assert harness.calls["PhaseTransitionEngine"] is result.decision_context
-    for institutional_engine in (
-        "InstitutionalRadarEngine", "InstitutionalDecisionMatrixEngine",
+    context_engine_order = (
+        "RecommendationStabilityEngine", "PhaseTransitionEngine",
+        "PatternRecognitionEngine", "InstitutionalRadarEngine", "CandleDNAEngine",
+        "SmartCandlestickEngine", "InstitutionalStructureEngine",
+        "FalseBreakoutEngine", "InstitutionalDecisionMatrixEngine",
         "InstitutionalFlowEngine", "InstitutionalConfidenceEngine",
-    ):
-        assert harness.calls[institutional_engine] is result.decision_context
-    for migrated_engine in (
-        "PatternRecognitionEngine", "CandleDNAEngine", "SmartCandlestickEngine",
-        "InstitutionalStructureEngine", "FalseBreakoutEngine", "EarlyWarningEngine",
-        "MarketRegimeEngine", "SmartMoneyIndexEngine", "MarketEnergyEngine",
-    ):
-        assert harness.calls[migrated_engine] is result.decision_context
+        "EarlyWarningEngine", "MarketRegimeEngine", "SmartMoneyIndexEngine",
+        "MarketEnergyEngine",
+    )
+    expected_prior_results = {
+        "RecommendationStabilityEngine": {"market_cycle"},
+        "PhaseTransitionEngine": {"market_cycle", "recommendation_stability"},
+        "PatternRecognitionEngine": {"market_cycle", "recommendation_stability", "phase_transition"},
+        "InstitutionalRadarEngine": {"market_cycle", "recommendation_stability", "phase_transition", "pattern_recognition", "trade_readiness"},
+        "CandleDNAEngine": {"market_cycle", "recommendation_stability", "phase_transition", "pattern_recognition", "trade_readiness", "institutional_radar", "market_story"},
+        "SmartCandlestickEngine": {"candle_dna"},
+        "InstitutionalStructureEngine": {"smart_candlestick"},
+        "FalseBreakoutEngine": {"institutional_structure", "institutional_footprint"},
+        "InstitutionalDecisionMatrixEngine": {"false_breakout", "institutional_confirmation"},
+        "InstitutionalFlowEngine": {"institutional_decision_matrix"},
+        "InstitutionalConfidenceEngine": {"institutional_flow"},
+        "EarlyWarningEngine": {"institutional_confidence", "signal_validation"},
+        "MarketRegimeEngine": {"early_warning"},
+        "SmartMoneyIndexEngine": {"market_regime"},
+        "MarketEnergyEngine": {"smart_money_index"},
+    }
+    contexts = [harness.calls[name] for name in context_engine_order]
+    assert len({id(context) for context in contexts}) == len(contexts)
+    for name, engine_context in zip(context_engine_order, contexts):
+        assert engine_context.market_snapshot is result.market_snapshot
+        assert expected_prior_results[name] <= set(engine_context.engine_results)
     assert result.decision_context.market_snapshot is result.market_snapshot
     assert result.decision_context.cycle_result is result.cycle_result
     assert result.decision_context.decision_history is result.decision_history
@@ -327,6 +345,7 @@ def test_service_preserves_pipeline_outputs_session_keys_and_order(harness):
     assert result.decision_context.engine_results["recommendation_stability"] is result.stability_result
     assert result.decision_context.engine_results["false_breakout"] is result.false_breakout_result
     assert result.decision_context.engine_results["institutional_confirmation"] is result.confirmation_result
+    assert result.pipeline_results.decision_context is result.decision_context
     assert isinstance(harness.calls["DataHealthEngine"], MarketSnapshot)
     assert harness.calls["MarketCycleEngine"] is harness.calls["DataHealthEngine"]
     assert harness.calls["DataHealthEngine"].option_result is harness.option_result

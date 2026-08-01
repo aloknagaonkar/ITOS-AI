@@ -1,8 +1,8 @@
-Sprint 8 Circular-Import Fix — Codex Build Log
-===============================================
+Sprint 8 Decision Context Propagation Fix — Codex Build Log
+============================================================
 
 Command:
-python -m py_compile itos_platform/__init__.py itos_platform/decision_pipeline.py itos_platform/safety_gate_policy.py dashboard_application_service.py tests/test_decision_pipeline.py
+python -m py_compile itos_platform/decision_pipeline.py dashboard_application_service.py tests/test_dashboard_application_service.py tests/test_decision_pipeline.py review/source/itos_platform/decision_pipeline.py review/source/dashboard_application_service.py review/source/tests/test_dashboard_application_service.py review/source/tests/test_decision_pipeline.py
 
 Complete output:
 (no stdout or stderr)
