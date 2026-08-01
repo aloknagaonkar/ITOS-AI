@@ -10,6 +10,7 @@ from .decision_context import (
     recommendation_is_available,
 )
 from .market_location import MarketLocation, MarketLocationEngine, MarketLocationSettings
+from .volume_structure import VolumeStructure, VolumeStructureEngine, VolumeStructureSettings
 __all__ = [
     "DataProvider",
     "DecisionContext",
@@ -21,6 +22,9 @@ __all__ = [
     "MarketLocationEngine",
     "MarketLocationSettings",
     "MarketSnapshot",
+    "VolumeStructure",
+    "VolumeStructureEngine",
+    "VolumeStructureSettings",
     "ProviderHealth",
     "recommendation_is_available",
 ]

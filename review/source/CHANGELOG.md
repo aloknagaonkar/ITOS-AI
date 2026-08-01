@@ -79,3 +79,9 @@
   application compatibility mapping, and a collapsed dashboard preview without
   changing CE, PE, or WAIT recommendation logic.
 - Added deterministic behavioral coverage and a Sprint 11 review/source package.
+
+## Sprint 12 — Volume Structure & Price-Volume Behaviour v1
+
+- Added immutable, configuration-driven price-volume facts and location-aware interpretations with safe degradation.
+- Reused one informational `VolumeStructure` through the decision context, pipeline results, compatibility mapping, and dashboard.
+- Added Market Status and Price & Volume Behaviour displays without changing recommendation, confidence, safety, planning, or execution logic.
