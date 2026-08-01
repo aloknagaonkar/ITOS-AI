@@ -8,3 +8,5 @@
 
 ## Corrective note
 Premium availability is evaluated per option side. An unavailable opposite-side premium remains visible as a quality flag but does not cap an otherwise valid selected state.
+
+Legacy mapping input may use snapshot price fields when typed Volume Structure is absent. This compatibility behavior is isolated from canonical `DecisionContext` input and carries `VOLUME_STRUCTURE_UNAVAILABLE`.

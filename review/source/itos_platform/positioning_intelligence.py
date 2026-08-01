@@ -9,7 +9,7 @@ from typing import Any
 
 import pandas as pd
 
-from .decision_context import DecisionContext
+from .decision_context import DecisionContext, MarketSnapshot
 
 
 @dataclass(frozen=True)
@@ -36,6 +36,14 @@ class PositioningIntelligence:
     dominant_state: str
     quality_flags: tuple[str, ...]
     explanations: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class _PositioningInput:
+    """Normalized engine input which preserves its original contract boundary."""
+
+    context: DecisionContext
+    typed_context: bool
 
 
 @dataclass(frozen=True)
@@ -90,11 +98,13 @@ class PositioningIntelligenceEngine:
     def __init__(self, settings: PositioningIntelligenceSettings | None = None) -> None:
         self.settings = settings
 
-    def analyze(self, context: DecisionContext) -> PositioningIntelligence:
+    def analyze(self, source: DecisionContext | Mapping[str, Any]) -> PositioningIntelligence:
+        normalized = self._adapt_input(source)
+        context = normalized.context
         settings = self.settings or PositioningIntelligenceSettings.from_mapping(
             context.configuration or context.runtime_configuration
         )
-        futures = self._futures(context, settings)
+        futures = self._futures(context, settings, normalized.typed_context)
         options = self._options(context, settings)
         flags = tuple(dict.fromkeys(futures.quality_flags + options.quality_flags))
         bullish = {"LONG_BUILDUP", "SHORT_COVERING", "PUT_WRITING", "CALL_BUYING"}
@@ -125,15 +135,26 @@ class PositioningIntelligenceEngine:
              f"Overall evidence is {bias.lower()}; dominant measured state is {dominant_state.replace('_', ' ').title()}.")
         )
 
-    def _futures(self, context: DecisionContext, s: PositioningIntelligenceSettings) -> PositioningState:
+    def _futures(
+        self,
+        context: DecisionContext,
+        s: PositioningIntelligenceSettings,
+        typed_context: bool = True,
+    ) -> PositioningState:
         volume = context.volume_structure
         flags: list[str] = []
         evidence: list[str] = []
         contradictions: list[str] = []
-        if volume is None:
+        if typed_context and volume is None:
             flags.append("VOLUME_STRUCTURE_UNAVAILABLE")
+            evidence.append(
+                "Canonical volume-structure evidence is unavailable; no futures "
+                "positioning state was inferred."
+            )
             return self._state("UNAVAILABLE", 0.0, evidence, contradictions, flags)
         price = self._number(getattr(volume, "price_change_percent", None))
+        if price is None and not typed_context:
+            price = self._legacy_price_change(context)
         if price is None:
             flags.append("PRICE_DIRECTION_UNAVAILABLE")
         summary = context.market_snapshot.option_result.get("summary", {}) if isinstance(context.market_snapshot.option_result, Mapping) else {}
@@ -149,7 +170,9 @@ class PositioningIntelligenceEngine:
             flags.extend(("OI_UNAVAILABLE", "OI_HISTORY_INSUFFICIENT"))
         elif proxy:
             flags.append("FUTURES_OI_PROXY_ONLY")
-        if "STALE_DATA" in getattr(volume, "quality_flags", ()):
+        if volume is None:
+            flags.append("VOLUME_STRUCTURE_UNAVAILABLE")
+        elif "STALE_DATA" in getattr(volume, "quality_flags", ()):
             flags.append("STALE_DATA")
         if context.market_location is None:
             flags.append("MARKET_LOCATION_UNAVAILABLE")
@@ -181,6 +204,35 @@ class PositioningIntelligenceEngine:
         if proxy:
             confidence = min(confidence, s.proxy_data_confidence_ceiling)
         return self._state(state, confidence, evidence, contradictions, flags)
+
+    @staticmethod
+    def _adapt_input(source: DecisionContext | Mapping[str, Any]) -> _PositioningInput:
+        if isinstance(source, DecisionContext):
+            return _PositioningInput(source, True)
+        if not isinstance(source, Mapping):
+            return _PositioningInput(
+                DecisionContext(MarketSnapshot.from_legacy({})),
+                False,
+            )
+        snapshot = MarketSnapshot.from_legacy(source)
+        context = DecisionContext(
+            market_snapshot=snapshot,
+            recommendation=source.get("recommendation") or {},
+            configuration=source.get("configuration") or {},
+            runtime_configuration=source.get("runtime_configuration") or {},
+            institutional_metrics=source.get("institutional_metrics"),
+            market_location=source.get("market_location"),
+            volume_structure=source.get("volume_structure"),
+        )
+        return _PositioningInput(context, False)
+
+    def _legacy_price_change(self, context: DecisionContext) -> float | None:
+        intelligence = context.market_snapshot.intelligence
+        price_data = intelligence.get("price", {}) if isinstance(intelligence, Mapping) else {}
+        return self._first_number(
+            price_data if isinstance(price_data, Mapping) else {},
+            ("change_percent", "price_change_percent", "change"),
+        )
 
     def _options(self, context: DecisionContext, s: PositioningIntelligenceSettings) -> PositioningState:
         metrics = context.institutional_metrics

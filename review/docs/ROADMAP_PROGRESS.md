@@ -32,3 +32,6 @@ A deferred intelligence feature should proceed only after product approval; Comp
 
 ## Sprint 13 corrective status
 Canonical dependency degradation and side-specific premium quality handling are corrected before Sprint 13A. Scope and decision impact remain unchanged.
+
+## Typed dependency boundary correction
+Sprint 13 now explicitly preserves canonical versus legacy input provenance. This correction does not add Sprint 13A scope or change decision influence.

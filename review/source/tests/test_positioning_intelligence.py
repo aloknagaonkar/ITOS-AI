@@ -170,3 +170,57 @@ def test_malformed_chain_cannot_create_options_positioning_or_promote_trade():
     assert result.options.state == "NEUTRAL"
     assert context.recommendation == recommendation
     assert context.recommendation["side"] == "WAIT"
+
+
+def test_typed_missing_volume_ignores_snapshot_price_and_positive_oi():
+    context = DecisionContext(
+        MarketSnapshot(
+            {"summary": {"futures_oi_change": 20}, "chain": pd.DataFrame()},
+            {"price": {"change_percent": 2}},
+        ),
+        recommendation={"side": "WAIT", "status": "WAIT"},
+        volume_structure=None,
+    )
+    result = PositioningIntelligenceEngine().analyze(context)
+    assert result.futures.state == "UNAVAILABLE"
+    assert "VOLUME_STRUCTURE_UNAVAILABLE" in result.futures.quality_flags
+    assert "Canonical volume-structure evidence is unavailable" in result.futures.evidence[0]
+    assert context.recommendation == {"side": "WAIT", "status": "WAIT"}
+
+
+def test_typed_missing_volume_never_calls_legacy_price_fallback():
+    class FailingLegacyFallback(PositioningIntelligenceEngine):
+        def _legacy_price_change(self, context):
+            raise AssertionError("typed input called the legacy fallback")
+
+    result = FailingLegacyFallback().analyze(
+        replace(_context(), volume_structure=None)
+    )
+    assert result.futures.state == "UNAVAILABLE"
+
+
+def test_legacy_mapping_retains_documented_price_fallback():
+    result = PositioningIntelligenceEngine().analyze({
+        "option_result": {
+            "summary": {"futures_oi_change": 20},
+            "chain": pd.DataFrame(),
+        },
+        "intelligence": {"price": {"change_percent": 2}},
+        "recommendation": {"side": "WAIT", "status": "WAIT"},
+    })
+    assert result.futures.state == "LONG_BUILDUP"
+    assert "VOLUME_STRUCTURE_UNAVAILABLE" in result.futures.quality_flags
+
+
+def test_missing_typed_volume_does_not_suppress_valid_options_state():
+    context = replace(
+        _context(
+            metrics=_metrics(put_oi=20, put_writing=10),
+            chain={"put_price_change": [-1]},
+            location=_location("BOTTOM"),
+        ),
+        volume_structure=None,
+    )
+    result = PositioningIntelligenceEngine().analyze(context)
+    assert result.futures.state == "UNAVAILABLE"
+    assert result.options.state == "PUT_WRITING"
