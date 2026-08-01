@@ -302,6 +302,11 @@ def test_service_preserves_pipeline_outputs_session_keys_and_order(harness):
     assert isinstance(harness.calls["RecommendationStabilityEngine"], DecisionContext)
     assert harness.calls["RecommendationStabilityEngine"] is result.decision_context
     assert harness.calls["PhaseTransitionEngine"] is result.decision_context
+    for institutional_engine in (
+        "InstitutionalRadarEngine", "InstitutionalDecisionMatrixEngine",
+        "InstitutionalFlowEngine", "InstitutionalConfidenceEngine",
+    ):
+        assert harness.calls[institutional_engine] is result.decision_context
     for migrated_engine in (
         "PatternRecognitionEngine", "CandleDNAEngine", "SmartCandlestickEngine",
         "InstitutionalStructureEngine", "FalseBreakoutEngine",
@@ -309,8 +314,12 @@ def test_service_preserves_pipeline_outputs_session_keys_and_order(harness):
         assert harness.calls[migrated_engine] is result.decision_context
     assert result.decision_context.market_snapshot is result.market_snapshot
     assert result.decision_context.cycle_result is result.cycle_result
-    assert harness.calls["InstitutionalFlowEngine"]["recommendation"] is result.recommendation
-    assert harness.calls["InstitutionalConfidenceEngine"]["flow_result"] is result.flow_result
+    assert result.decision_context.decision_history is result.decision_history
+    assert result.decision_context.strike_history is result.decision_strike_history
+    assert result.decision_context.engine_results["institutional_radar"] is result.radar_result
+    assert result.decision_context.engine_results["institutional_decision_matrix"] is result.decision_matrix_result
+    assert result.decision_context.engine_results["institutional_flow"] is result.flow_result
+    assert result.decision_context.engine_results["institutional_confidence"] is result.ice_result
     assert harness.calls["SignalValidationEngine"]["ice_result"] is result.ice_result
     assert harness.calls["EarlyWarningEngine"]["validation_result"] is result.validation_result
     assert harness.calls["MarketRegimeEngine"]["flow_result"] is result.flow_result

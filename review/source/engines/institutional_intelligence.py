@@ -239,7 +239,8 @@ class TradeReadinessEngine(BaseEngine):
 class InstitutionalRadarEngine(BaseEngine):
     name = "Institutional Radar"
 
-    def analyze(self, market_data: dict[str, Any]) -> EngineResult:
+    def analyze(self, market_data: DecisionContext | Mapping[str, Any]) -> EngineResult:
+        market_data = self._adapt_input(market_data)
         rec = market_data.get("recommendation", {})
         option = market_data.get("option_result", {})
         institutional = market_data.get("institutional") or {}
@@ -267,6 +268,29 @@ class InstitutionalRadarEngine(BaseEngine):
             "institution_bias": bias,
             "recommendation_alignment": vote in {side, "WAIT"},
         })
+
+    @staticmethod
+    def _adapt_input(
+        market_data: DecisionContext | Mapping[str, Any],
+    ) -> Mapping[str, Any]:
+        """Normalize typed and legacy inputs without changing radar calculations."""
+
+        if isinstance(market_data, DecisionContext):
+            snapshot = market_data.market_snapshot
+            return {
+                "recommendation": market_data.recommendation,
+                "option_result": snapshot.option_result,
+                "intelligence": snapshot.intelligence,
+                "institutional": market_data.institutional or {},
+            }
+        if not isinstance(market_data, Mapping):
+            return {}
+        return {
+            "recommendation": market_data.get("recommendation") if isinstance(market_data.get("recommendation"), Mapping) else {},
+            "option_result": market_data.get("option_result") if isinstance(market_data.get("option_result"), Mapping) else {},
+            "intelligence": market_data.get("intelligence") if isinstance(market_data.get("intelligence"), Mapping) else {},
+            "institutional": market_data.get("institutional") if isinstance(market_data.get("institutional"), Mapping) else {},
+        }
 
 
 class MarketStoryEngine(BaseEngine):

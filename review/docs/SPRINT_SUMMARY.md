@@ -1,5 +1,7 @@
-# Sprint 5 Summary
+# Sprint 6 Summary
 
-Sprint 5 migrates the complete Structure Intelligence family—Pattern Recognition, Candle DNA, Smart Candlestick, Institutional Structure, and False Breakout—to the canonical `DecisionContext` input. Each engine retains its legacy dictionary contract through one private adapter and executes its existing calculation only once.
+Sprint 6 migrates `InstitutionalRadarEngine`, `InstitutionalFlowEngine`, `InstitutionalConfidenceEngine`, and `InstitutionalDecisionMatrixEngine` to prefer `DecisionContext`. Each engine retains its public `analyze({...})` compatibility path and runs typed and legacy calls through one private adapter into the existing calculations.
 
-The dashboard continues to create one `MarketSnapshot` and one `DecisionContext`. The migrated engines receive that exact context instance. Intermediate structure results are registered on the context so downstream False Breakout analysis consumes the same results without reconstructing either canonical object. Engine order and safety gates are unchanged.
+`DashboardApplicationService` still creates one `MarketSnapshot` and one `DecisionContext`. The four migrated engines now receive that same context instance in their existing execution positions. Decision and strike history are carried by `DecisionContext`; repositories remain owned by the application service and market-only data remains in `MarketSnapshot`.
+
+Malformed or absent flow histories degrade to the existing warming-up/WAIT result. Malformed strike history is ignored rather than producing directional evidence.

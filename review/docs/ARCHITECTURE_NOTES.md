@@ -1,7 +1,8 @@
 # Architecture Notes
 
-- `MarketSnapshot` remains frozen and contains point-in-time market data only.
-- `DecisionContext` now explicitly carries the optional institutional decision input because Pattern Recognition genuinely requires it; it is not placed in the snapshot.
-- Every migrated engine exposes the unchanged `analyze(...)` method and owns exactly one private `_adapt_input` boundary adapter.
-- Adapters translate typed contexts to the legacy-shaped internal model, leaving all scoring, thresholds, explanations, metadata, and degradation branches unchanged.
-- The dashboard creates one snapshot and one context. It registers intermediate results in the context's existing `engine_results` mapping for downstream use rather than constructing replacement contexts.
+- `MarketSnapshot` remains point-in-time market data only.
+- `DecisionContext` owns decision-layer dependencies, including institutional summary, decision history, strike history, and engine results.
+- The application service, not `InstitutionalFlowEngine`, reads repositories.
+- Each migrated engine has exactly one private `_adapt_input` boundary for typed and legacy inputs; calculations are shared after adaptation.
+- `engine_results` remains the incremental compatibility registry used by the frozen context during ordered pipeline execution.
+- Engine order, gates, recommendation mutation, persistence, and dashboard result keys remain unchanged.
