@@ -1,5 +1,3 @@
-# Sprint 18.4D — Historical Analytics
+# Sprint Summary
 
-Implemented a typed, isolated Historical Analytics workspace that reads persisted Historical Market Lake intelligence and outcomes only. It provides all standard and custom periods, stored-data filters, coverage diagnostics, deterministic aggregates of existing dashboard concepts, factual outcome summaries, per-section drill-down, CSV/JSON export, and a collapsed Developer → Market Lake panel.
-
-Live, Historical Replay, Sample Data, the Decision Pipeline, provider/download behavior, and CE/PE/WAIT recommendation logic are unchanged. Incomplete data is reported and is never downloaded, rebuilt, or fabricated during analysis.
+Sprint 18.4D.1 implements the authenticated Upstox Historical Sync Manager: typed instruments/settings/contracts, plan preview, missing-date bounded download, normalization, per-date checkpoint/resume, retry/cancellation, independent intelligence and outcome actions, scoped Analytics refresh, UI controls, and deterministic fake-based tests. Analytical formulas, recommendation vocabulary, Live, and Replay behavior are unchanged.

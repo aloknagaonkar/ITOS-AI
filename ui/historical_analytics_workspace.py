@@ -15,6 +15,10 @@ from itos_platform.historical_analytics import (
 from itos_platform.market_lake import (
     HistoricalRangeRequest, LocalHistoricalMarketLake, MarketLakeDeveloperService, PeriodPreset,
 )
+from itos_platform.historical_sync import (
+    HistoricalAuthenticationError, HistoricalSyncManager,
+    HistoricalSyncProgress, invalidate_historical_analytics_cache,
+)
 
 PREFIX = "historical_analytics_"
 
@@ -70,13 +74,12 @@ def _sections(result: HistoricalAnalyticsResult) -> tuple[tuple[str, Mapping[str
         ("Top 5 PE", {"occurrences": result.top_pe_occurrences}), ("Historical Outcomes", outcomes))
 
 
-def _developer_panel(lake: LocalHistoricalMarketLake, provider: str, result: HistoricalAnalyticsResult,
-                     actions: MarketLakeActions) -> None:
+def _developer_panel(lake: LocalHistoricalMarketLake, provider: str, request: HistoricalRangeRequest,
+                     actions: MarketLakeActions, manager: HistoricalSyncManager | None,
+                     cadence: int) -> None:
     expanded = bool(st.session_state.get(PREFIX+"developer_open", False))
-    with st.expander("Developer → Market Lake", expanded=expanded):
-        request = result.request
-        range_request = HistoricalRangeRequest(request.underlying, request.instrument_key, request.start_date,
-            request.end_date, request.interval_minutes)
+    with st.expander("Developer → Market Lake / Historical Data Manager", expanded=expanded):
+        range_request = request
         status = MarketLakeDeveloperService(lake, provider).status(range_request)
         manifest = lake.get_manifest(provider, request.instrument_key, request.interval_minutes)
         details = {"Market Lake root": str(lake.root), "Provider": provider, "Instrument": request.instrument_key,
@@ -85,23 +88,59 @@ def _developer_panel(lake: LocalHistoricalMarketLake, provider: str, result: His
             "Raw schema version": lake.settings.raw_schema_version,
             "Intelligence schema version": lake.settings.intelligence_schema_version,
             "Outcome schema version": lake.settings.outcome_schema_version, "Engine version": status.engine_version,
-            "Raw sessions": result.raw_session_count, "Intelligence sessions": result.intelligence_session_count,
-            "Outcome sessions": result.outcome_session_count, "Option sessions": result.option_session_count,
-            "Completed dates": status.completed_dates, "Missing dates": result.missing_dates, "Failed dates": status.failed_dates}
+            "Authentication": "Available" if manager and manager.authentication_available else "Unavailable",
+            "Completed dates": status.completed_dates, "Failed dates": status.failed_dates}
         st.json(details)
-        buttons = st.columns(3)
-        callbacks = (("Sync Missing Data", actions.sync_missing_data), ("Build Intelligence", actions.build_intelligence),
-                     ("Build Outcomes", actions.build_outcomes))
+        st.caption("Recommended pilot: NIFTY, 1 minute, 1 week, 5-minute analysis cadence.")
+        st.info("Historical option-chain snapshots are unavailable for this sync. Records are CANDLE_ONLY_REPLAY.")
+        rebuild = st.columns(3)
+        redownload = rebuild[0].checkbox("Re-download Raw Data", value=False, key=PREFIX+"redownload")
+        rebuild_intel = rebuild[1].checkbox("Rebuild Intelligence", value=False, key=PREFIX+"rebuild_intelligence")
+        rebuild_outcomes = rebuild[2].checkbox("Rebuild Outcomes", value=False, key=PREFIX+"rebuild_outcomes")
+        range_request = HistoricalRangeRequest(range_request.underlying, range_request.instrument_key,
+            range_request.start_date, range_request.end_date, range_request.interval_minutes,
+            include_options=False, rebuild_raw=redownload, rebuild_intelligence=rebuild_intel,
+            rebuild_outcomes=rebuild_outcomes)
+        if st.button("Preview Plan", key=PREFIX+"preview_plan", disabled=manager is None):
+            try: st.session_state[PREFIX+"sync_plan"] = manager.preview_plan(range_request, cadence_minutes=cadence)
+            except ValueError as error: st.error(str(error))
+        plan = st.session_state.get(PREFIX+"sync_plan")
+        if plan is not None:
+            st.json({"Expected sessions": len(plan.expected_dates), "Raw sessions complete": len(plan.complete_dates),
+                "Missing raw sessions": len(plan.missing_dates), "Intelligence sessions to build": len(plan.dates_to_enrich),
+                "Outcome sessions to build": len(plan.dates_to_build_outcomes), "Estimated raw requests": plan.estimated_raw_requests,
+                "Estimated analysis points": plan.estimated_analysis_points, "Analysis cadence minutes": cadence})
+        def raw_action(_request):
+            progress_box = st.empty()
+            def report(value: HistoricalSyncProgress):
+                st.session_state[PREFIX+"progress"] = value; progress_box.json(value.__dict__)
+            result = manager.sync_missing_raw(_request, progress=report)
+            st.session_state[PREFIX+"sync_result"] = result
+            invalidate_historical_analytics_cache(st.session_state)
+            return result
+        callbacks = (("Sync Missing Raw Data", raw_action if manager else actions.sync_missing_data),
+                     ("Retry Failed Dates", raw_action if manager else actions.sync_missing_data),
+                     ("Build Intelligence", actions.build_intelligence), ("Build Outcomes", actions.build_outcomes))
+        buttons = st.columns(4)
         for column, (label, callback) in zip(buttons, callbacks):
             if column.button(label, key=PREFIX+label.lower().replace(" ", "_"), disabled=callback is None):
-                callback(range_request)
-                st.success(f"{label} requested through the existing Market Lake service.")
+                try:
+                    callback(range_request); invalidate_historical_analytics_cache(st.session_state)
+                    st.success(f"{label} completed through the Market Lake service.")
+                except HistoricalAuthenticationError: st.error("Historical Upstox authentication failed.")
+                except Exception: st.error(f"{label} failed. Review sanitized application logs.")
+        if st.button("Reset UI Progress", key=PREFIX+"reset_progress"):
+            for key in tuple(st.session_state):
+                if key in (PREFIX+"sync_plan", PREFIX+"sync_result", PREFIX+"progress"): del st.session_state[key]
+        if st.session_state.get(PREFIX+"progress") is not None: st.write("Current progress", st.session_state[PREFIX+"progress"])
+        if st.session_state.get(PREFIX+"sync_result") is not None: st.write("Last sync result", st.session_state[PREFIX+"sync_result"])
         if not all(callback for _, callback in callbacks):
             st.caption("Maintenance actions require deployment-provided existing Market Lake service callbacks.")
 
 
 def render_historical_analytics_workspace(underlyings: Mapping[str, str], *, provider: str = "upstox",
-        lake: LocalHistoricalMarketLake | None = None, actions: MarketLakeActions = MarketLakeActions()) -> None:
+        lake: LocalHistoricalMarketLake | None = None, actions: MarketLakeActions = MarketLakeActions(),
+        sync_manager: HistoricalSyncManager | None = None) -> None:
     """Render analytics without reading or writing replay/live session keys."""
     st.header("Historical Analytics")
     lake = lake or LocalHistoricalMarketLake(); service = HistoricalAnalyticsService(lake, provider=provider)
@@ -116,6 +155,8 @@ def render_historical_analytics_workspace(underlyings: Mapping[str, str], *, pro
         custom_start = dates[0].date_input("Custom Start Date", date.today()-timedelta(days=7), key=PREFIX+"custom_start")
         custom_end = dates[1].date_input("Custom End Date", date.today(), key=PREFIX+"custom_end")
     engine = st.text_input("Engine Version", lake.settings.engine_version, key=PREFIX+"engine_version") or None
+    cadence = st.selectbox("Analysis cadence", lake.settings.supported_analysis_cadences, index=2,
+        key=PREFIX+"analysis_cadence")
     with st.expander("Historical Analytics Filters", expanded=True):
         filters = st.columns(3)
         recommendation = filters[0].selectbox("Recommendation filter", ("ALL", "BUY CE", "BUY PE", "WAIT"), key=PREFIX+"recommendation")
@@ -131,6 +172,9 @@ def render_historical_analytics_workspace(underlyings: Mapping[str, str], *, pro
                 compression[0], compression[1], positioning, manipulation, bias, completeness)
             st.session_state[PREFIX+"result"] = service.analyze(request)
         except ValueError as error: st.error(str(error))
+    end = custom_end or date.today(); start, end = resolve_analytics_period(period, end, custom_start)
+    manager_request = HistoricalRangeRequest(underlying, instrument, start, end, interval, include_options=False)
+    _developer_panel(lake, provider, manager_request, actions, sync_manager, cadence)
     result = st.session_state.get(PREFIX+"result")
     if not isinstance(result, HistoricalAnalyticsResult):
         st.info("Choose a range and click **Analyze Stored Data**. No data is downloaded automatically.")
@@ -148,4 +192,3 @@ def render_historical_analytics_workspace(underlyings: Mapping[str, str], *, pro
         key=PREFIX+"export_csv", use_container_width=True)
     exports[1].download_button("Export JSON", service.export_json(result), "historical_analytics.json", "application/json",
         key=PREFIX+"export_json", use_container_width=True)
-    _developer_panel(lake, provider, result, actions)
