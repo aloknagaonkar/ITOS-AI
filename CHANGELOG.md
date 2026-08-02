@@ -170,3 +170,9 @@
 - Added trader-facing coverage, aggregate dashboard, filtered review table, deterministic directional classifications, stored-evidence triggers/reasons, and frozen-record deep dives.
 - Added explicit expired-option partial replay, derived candle chain, failure-isolated live Market Lake capture, and after-market finalization contracts.
 - Confined raw JSON to collapsed Advanced Diagnostics and preserved all trading formulas and roadmap order.
+
+## Sprint 18.4E — Historical Intelligence Index & Market Fingerprinting
+- Added stable SHA-256 historical trade identities, immutable versioned decision-time semantic and numeric fingerprints, and explicit feature/token/opposite registries.
+- Added a transactional indexed SQLite store, safe filtering/pagination, incremental build/checkpoints, generation-aware statistics cache, and preliminary relationship graph.
+- Preserved Market Lake files, outcome separation, replay no-look-ahead, CE/PE/WAIT decisions, dashboards, and all analytical formulas.
+- Hardened Sprint 18.4E nested/legacy field extraction, collision rejection, nondestructive validation/status, complete paginated statistics, symmetric neighbor retrieval, controlled version rebuild/resume, transactional rollback, and failure-isolated auto-update hooks.
