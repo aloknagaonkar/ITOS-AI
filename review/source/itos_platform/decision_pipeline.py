@@ -39,6 +39,9 @@ from .decision_confidence import DecisionConfidence, DecisionConfidenceEngine
 from .decision_confidence_validation import (
     DecisionConfidenceValidation, DecisionConfidenceValidationEngine,
 )
+from .trade_opportunity_ranking import (
+    TradeOpportunityRanking, TradeOpportunityRankingEngine,
+)
 from .safety_gate_policy import SafetyDecision, SafetyGatePolicy
 
 
@@ -77,6 +80,7 @@ class PipelineResults:
     institutional_evidence: InstitutionalEvidence | None = None
     decision_confidence: DecisionConfidence | None = None
     decision_confidence_validation: DecisionConfidenceValidation | None = None
+    trade_opportunity_ranking: TradeOpportunityRanking | None = None
 
     @property
     def ice_result(self) -> Any:
@@ -116,6 +120,7 @@ class DecisionPipeline:
         "MarketRegimeEngine", "InstitutionalEvidenceEngine", "SmartMoneyIndexEngine",
         "MarketEnergyEngine", "DataHealthEngine", "DecisionConfidenceEngine",
         "DecisionConfidenceValidationEngine",
+        "TradeOpportunityRankingEngine",
     )
 
     def __init__(
@@ -127,6 +132,7 @@ class DecisionPipeline:
         institutional_evidence_engine: InstitutionalEvidenceEngine | None = None,
         decision_confidence_engine: DecisionConfidenceEngine | None = None,
         decision_confidence_validation_engine: DecisionConfidenceValidationEngine | None = None,
+        trade_opportunity_ranking_engine: TradeOpportunityRankingEngine | None = None,
     ) -> None:
         self.safety_policy = safety_policy or SafetyGatePolicy()
         self.institutional_metrics_engine = (
@@ -138,6 +144,9 @@ class DecisionPipeline:
         self.decision_confidence_engine = decision_confidence_engine or DecisionConfidenceEngine()
         self.decision_confidence_validation_engine = (
             decision_confidence_validation_engine or DecisionConfidenceValidationEngine()
+        )
+        self.trade_opportunity_ranking_engine = (
+            trade_opportunity_ranking_engine or TradeOpportunityRankingEngine()
         )
 
     def execute(self, context: DecisionContext) -> PipelineResults:
@@ -280,7 +289,12 @@ class DecisionPipeline:
             context, "decision_confidence_validation", decision_confidence_validation,
             decision_confidence_validation=decision_confidence_validation,
         )
-        return PipelineResults(cycle_result, stability_result, transition_result, pattern_result, readiness_result, radar_result, story_result, candle_dna_result, smart_candle_result, structure_result, market_location, volume_structure, positioning_intelligence, compression_intelligence, footprint_result, false_breakout_result, manipulation_intelligence, confirmation_result, decision_matrix_result, flow_result, institutional_confidence_result, validation_result, early_warning_result, regime_result, smart_money_result, energy_result, data_health_result, context, safety_decision, institutional_metrics, institutional_evidence, decision_confidence, decision_confidence_validation)
+        trade_opportunity_ranking = self.trade_opportunity_ranking_engine.analyze(context)
+        context = self._with_result(
+            context, "trade_opportunity_ranking", trade_opportunity_ranking,
+            trade_opportunity_ranking=trade_opportunity_ranking,
+        )
+        return PipelineResults(cycle_result, stability_result, transition_result, pattern_result, readiness_result, radar_result, story_result, candle_dna_result, smart_candle_result, structure_result, market_location, volume_structure, positioning_intelligence, compression_intelligence, footprint_result, false_breakout_result, manipulation_intelligence, confirmation_result, decision_matrix_result, flow_result, institutional_confidence_result, validation_result, early_warning_result, regime_result, smart_money_result, energy_result, data_health_result, context, safety_decision, institutional_metrics, institutional_evidence, decision_confidence, decision_confidence_validation, trade_opportunity_ranking)
 
     @staticmethod
     def _with_result(

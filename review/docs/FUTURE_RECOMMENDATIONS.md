@@ -1,2 +1,7 @@
 # Future Recommendations
-Deferred: Trade Opportunity Ranking; Top 5 CE and PE Opportunities; Strike Opportunity Score; Trade Readiness Index; Executive Trade Cockpit; historical outcome validation; confidence calibration from outcomes; adaptive/ML weights; persistence-schema redesign; and any dashboard cleanup or redesign. Sprint 18 should consume `ranking_eligible` without bypassing blockers and must remain separate from strike selection until explicitly scoped.
+
+1. Build the Executive Trade Cockpit without promoting this shadow ranking into execution.
+2. Add a Trade Readiness Index and final contract summary only after explicit scope approval.
+3. Integrate entry, stop, and targets with ranked contracts in a later sprint.
+4. Validate outcomes, calibrate ranking bands, and only then consider adaptive weights.
+5. Add exchange-calendar DTE and instrument-specific distance profiles through configuration.
