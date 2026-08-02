@@ -1,2 +1,3 @@
-# Sprint 16 Summary
-Sprint 16 adds an immutable `InstitutionalEvidence` view which aggregates existing typed location, behaviour, positioning, compression, manipulation, metrics, flow and regime context. It is deterministic, explainable, safely degraded, and informational only. The dashboard adds a collapsed Institutional Evidence panel and five additive Market Status metrics. No live recommendation path consumes this result.
+# Sprint 17A Summary
+
+Sprint 17A introduces an immutable, explainable Decision Confidence result answering how trustworthy the current analytical setup is before CE/PE candidate ranking. Seven independently visible pillars aggregate clarity and reliability. Configuration-driven penalties, ceilings, blockers, grade, setup quality, and ranking readiness are informational and shadow-only. One result instance travels through the typed context, pipeline results, compatibility mapping, Market Status, and the new additive panel. Recommendation, SafetyGatePolicy, AI Trade Opportunity, strike selection, planning, and live confidence remain unchanged.

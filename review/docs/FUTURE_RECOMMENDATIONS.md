@@ -1,2 +1,3 @@
 # Future Recommendations
-Deferred: Decision Confidence Index (next sprint), Trade Readiness Index, opportunity ranking, Top 5 CE/PE opportunities, Executive Trade Cockpit, trade-planner refinements, historical validation/learning, score calibration, and richer typed flow/regime/compression contracts. None belongs in Sprint 16 and none was allowed to affect live decisions.
+
+Deferred beyond Sprint 17A: Decision Confidence validation, outcome calibration, history persistence, trend tracking (improving/stable/weakening), Trade Opportunity Ranking, Top 5 CE and PE candidate scoring, strike scoring, Trade Readiness Index, Executive Trade Cockpit, historical learning, trade-plan integration, and any live recommendation or automated-execution influence.
