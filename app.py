@@ -63,6 +63,7 @@ from itos_platform.replay import (
 )
 from itos_platform.replay_ux import change_data_mode, initialize_replay_state
 from ui.replay_workspace import render_replay_workspace
+from ui.historical_analytics_workspace import render_historical_analytics_workspace
 
 load_dotenv()
 st.set_page_config(
@@ -149,10 +150,13 @@ token = auth()
 authenticated_client = UpstoxClient(token) if token else None
 initialize_replay_state(st.session_state)
 selected_mode = st.sidebar.selectbox(
-    "Data Mode", tuple(DataMode),
-    index=tuple(DataMode).index(st.session_state["replay_data_mode"]),
-    format_func=lambda value: value.value,
+    "Top Level Mode", ("LIVE", "HISTORICAL REPLAY", "HISTORICAL ANALYTICS"),
+    index=0,
 )
+if selected_mode == "HISTORICAL ANALYTICS":
+    render_historical_analytics_workspace(UNDERLYINGS)
+    st.stop()
+selected_mode = DataMode.LIVE if selected_mode == "LIVE" else DataMode.HISTORICAL_REPLAY
 change_data_mode(st.session_state, selected_mode)
 workspace_options = ("Analyst Dashboard",) if selected_mode is DataMode.LIVE else ("Historical Replay", "Analyst Dashboard")
 workspace = st.sidebar.radio("Workspace", workspace_options, key="replay_selected_workspace")
