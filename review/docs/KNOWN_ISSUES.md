@@ -1,6 +1,6 @@
-# Known Issues
-- Typed JSON is the v1 fallback; a Parquet adapter can be added behind the protocol when a Parquet engine is approved.
-- Exchange holiday discovery remains provider-driven; callers provide expected dates and no-data dates are recorded.
-- Corrupt reads safely return unavailable, but physical quarantine/repair tooling is deferred.
-- The runner adapter must be wired by deployment code to its configured HistoricalReplayProvider and DashboardApplicationService.
-- Manifest intelligence/outcome completion updates are available as typed fields; orchestration-specific promotion occurs after the owning batch decides its date is complete.
+# Known Issues — Sprint 18.4D
+
+- Expected trading sessions use weekdays because the existing Market Lake contract does not persist an exchange holiday calendar; manifest dates remain authoritative for actual coverage.
+- JSON is the dependency-free secondary export. Parquet remains unavailable unless a supported Parquet engine is added to approved dependencies.
+- Developer maintenance buttons require deployment wiring to existing ingestion/enrichment/outcome service callbacks and remain disabled when those callbacks are not configured.
+- Historical aggregates reflect only fields persisted by the engine/schema version selected; unavailable facts are not synthesized.
