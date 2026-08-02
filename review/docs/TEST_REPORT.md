@@ -1,11 +1,9 @@
-# Test Report — Sprint 18.4D.2
-Developer baseline: **515 passed in 8.17s** before Sprint 18.4D.2.
+# Test Report — Sprint 18.4E Hardening
 
-Final validation is recorded after execution:
-- Python compilation: PASS — `python -m py_compile` on all modified Python and source-review copies.
-- Focused pytest: PASS — 145 passed in 2.61s.
-- Full pytest: PASS — 562 passed in 7.66s.
-- `git diff --check`: PASS.
-- Optional real Upstox smoke test: NOT RUN (`REAL_UPSTOX_TESTS=disabled`).
-- Streamlit startup smoke test: PASS — health endpoint returned `ok`.
-- Manual UI validation: NOT RUN — DEVELOPER VALIDATION REQUIRED.
+- Developer baseline before Sprint 18.4E: **567 passing tests**; pre-hardening Sprint 18.4E report: **573 passing tests**.
+- `python -m py_compile itos_platform/historical_intelligence_index.py tests/test_historical_intelligence_index.py review/source/historical_intelligence_index.py review/source/test_historical_intelligence_index.py`: **PASS**.
+- `python -m pytest -q tests/test_historical_intelligence_index.py`: **PASS — 18 passed in 1.38s**.
+- `python -m pytest -q`: **PASS — 580 passed in 8.78s**.
+- `git diff --check`: **PASS**.
+- Streamlit smoke test: **NOT RUN for hardening**; no UI files changed.
+- Manual UI validation: **NOT RUN — DEVELOPER VALIDATION REQUIRED**.

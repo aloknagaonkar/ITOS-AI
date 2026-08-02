@@ -1,15 +1,10 @@
-# Files Changed
-## Added
-- `itos_platform/historical_trade_review.py`
-- `itos_platform/historical_options.py`
-- `itos_platform/live_market_lake.py`
-- `tests/test_historical_trade_review.py`
-- `tests/test_historical_options_and_live_capture.py`
-- `review/docs/HISTORICAL_TRADE_REVIEW_RULES.md`
+# Files Changed — Sprint 18.4E Hardening
+
 ## Modified
-- `ui/historical_analytics_workspace.py`
-- `upstox_client.py`
-- `CHANGELOG.md`
-- Sprint review documentation and source review package.
-## Deleted
-None.
+- `itos_platform/historical_intelligence_index.py` — nested extraction, identity collision safety, status/validation, complete statistics, symmetric graph, rebuild/resume and hooks.
+- `tests/test_historical_intelligence_index.py` — realistic nested, status, corruption, pagination, graph, versions, rollback, collision and hook tests.
+- `CHANGELOG.md` and the corresponding `review/source` copies.
+- Sprint rules, architecture, known issues, self-review, test report, and this inventory in `review/docs`.
+
+## Added / Deleted
+None in the hardening commit.

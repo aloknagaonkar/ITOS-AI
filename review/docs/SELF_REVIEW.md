@@ -1,2 +1,4 @@
-# Self Review
-Frozen stored intelligence is never recalculated; future facts only classify direction. Missing data stays unavailable. New provider calls are read-only and explicit. Secret fields are removed before persistence. Existing CE/PE/WAIT, confidence, validation, ranking, Live, Replay, and no-look-ahead logic were not edited. Behavioral tests cover classification, triggers, coverage, filters, options, capture, idempotence, failure isolation, and secrets.
+# Self Review — Sprint 18.4E
+Verified outcome data never enters fingerprint tokens/features, SQL values are parameterized, sorting and pagination are validated, schema mismatch is nondestructive, version rows coexist, records/contracts are frozen, missing inputs degrade safely, and no pipeline/dashboard/trading formula was modified. Generated index storage is ignored.
+
+Hardening review verified realistic nested aliases, outcome exclusion, full-dataset statistics, corruption reporting, collision rollback, symmetric per-trade neighbor limits, resume/rebuild behavior, and disabled-by-default failure-isolated hooks.
