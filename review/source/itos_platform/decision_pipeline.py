@@ -32,7 +32,7 @@ from .institutional_metrics import InstitutionalMetrics, InstitutionalMetricsEng
 from .market_location import MarketLocation, MarketLocationEngine
 from .volume_structure import VolumeStructure, VolumeStructureEngine
 from .positioning_intelligence import PositioningIntelligence, PositioningIntelligenceEngine
-from .compression_intelligence import CompressionIntelligence
+from .compression_intelligence import CompressionIntelligence, CompressionIntelligenceEngine
 from .manipulation_intelligence import ManipulationIntelligence, ManipulationIntelligenceEngine
 from .institutional_evidence import InstitutionalEvidence, InstitutionalEvidenceEngine
 from .decision_confidence import DecisionConfidence, DecisionConfidenceEngine
@@ -112,7 +112,7 @@ class DecisionPipeline:
         "InstitutionalStructureEngine", "MarketLocationEngine",
         "VolumeStructureEngine",
         "PositioningIntelligenceEngine",
-        "CompressionIntelligence",
+        "CompressionIntelligenceEngine",
         "InstitutionalFootprintEngine",
         "FalseBreakoutEngine", "ManipulationIntelligenceEngine", "InstitutionalConfirmationEngine",
         "InstitutionalDecisionMatrixEngine", "InstitutionalFlowEngine",
@@ -128,6 +128,7 @@ class DecisionPipeline:
         safety_policy: SafetyGatePolicy | None = None,
         institutional_metrics_engine: InstitutionalMetricsEngine | None = None,
         positioning_intelligence_engine: PositioningIntelligenceEngine | None = None,
+        compression_intelligence_engine: CompressionIntelligenceEngine | None = None,
         manipulation_intelligence_engine: ManipulationIntelligenceEngine | None = None,
         institutional_evidence_engine: InstitutionalEvidenceEngine | None = None,
         decision_confidence_engine: DecisionConfidenceEngine | None = None,
@@ -139,6 +140,7 @@ class DecisionPipeline:
             institutional_metrics_engine or InstitutionalMetricsEngine()
         )
         self.positioning_intelligence_engine = positioning_intelligence_engine or PositioningIntelligenceEngine()
+        self.compression_intelligence_engine = compression_intelligence_engine or CompressionIntelligenceEngine()
         self.manipulation_intelligence_engine = manipulation_intelligence_engine or ManipulationIntelligenceEngine()
         self.institutional_evidence_engine = institutional_evidence_engine or InstitutionalEvidenceEngine()
         self.decision_confidence_engine = decision_confidence_engine or DecisionConfidenceEngine()
@@ -204,7 +206,7 @@ class DecisionPipeline:
             context, "positioning_intelligence", positioning_intelligence,
             positioning_intelligence=positioning_intelligence,
         )
-        compression_intelligence = context.compression_intelligence or CompressionIntelligence()
+        compression_intelligence = self.compression_intelligence_engine.analyze(context)
         context = self._with_result(
             context, "compression_intelligence", compression_intelligence,
             compression_intelligence=compression_intelligence,

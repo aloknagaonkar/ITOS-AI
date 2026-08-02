@@ -1116,11 +1116,21 @@ with tab_live:
         if compression_intelligence is None or compression_intelligence.state == "UNAVAILABLE":
             st.info("Compression intelligence is unavailable.")
         else:
+            st.caption(compression_intelligence.meaning)
             compression_columns = st.columns(4)
             compression_columns[0].metric("State", compression_intelligence.state.replace("_", " ").title())
-            compression_columns[1].metric("Energy Stored", f"{compression_intelligence.energy_stored:.0f}%")
-            compression_columns[2].metric("Expansion Readiness", f"{compression_intelligence.expansion_readiness:.0f}%")
-            compression_columns[3].metric("Confidence", f"{compression_intelligence.confidence:.0f}%")
+            compression_columns[1].metric("Compression Score", f"{compression_intelligence.compression_score:.0f}%")
+            compression_columns[2].metric("Energy Stored", f"{compression_intelligence.energy_stored:.0f}%")
+            compression_columns[3].metric("Expansion Readiness", f"{compression_intelligence.expansion_readiness:.0f}%")
+            st.write(f"**Direction:** {compression_intelligence.direction.replace('_', ' ').title()} · **Confidence:** {compression_intelligence.confidence:.0f}%")
+            st.write("**Component scores:**", {"ATR": compression_intelligence.atr_compression_score, "Range": compression_intelligence.range_compression_score, "Spread": compression_intelligence.candle_spread_compression_score, "Volume": compression_intelligence.volume_compression_score, "Return volatility": compression_intelligence.volatility_compression_score, "Time": compression_intelligence.time_compression_score, "OI build": compression_intelligence.oi_build_score})
+            st.write("**Raw diagnostics:**", {"Recent ATR": compression_intelligence.recent_atr, "Baseline ATR": compression_intelligence.baseline_atr, "ATR ratio": compression_intelligence.atr_ratio, "Recent range": compression_intelligence.recent_range, "Baseline range": compression_intelligence.baseline_range, "Range ratio": compression_intelligence.range_ratio, "Recent volume": compression_intelligence.recent_volume, "Baseline volume": compression_intelligence.baseline_volume, "Relative volume": compression_intelligence.relative_volume, "Duration": compression_intelligence.compression_duration})
+            if compression_intelligence.evidence:
+                st.write("**Evidence:**", list(compression_intelligence.evidence))
+            if compression_intelligence.contradictions:
+                st.write("**Contradictions:**", list(compression_intelligence.contradictions))
+            if compression_intelligence.quality_flags:
+                st.write("**Quality flags:**", list(compression_intelligence.quality_flags))
             for explanation in compression_intelligence.explanations:
                 st.write(f"• {explanation}")
 
