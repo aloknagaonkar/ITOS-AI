@@ -1,3 +1,2 @@
 # Self Review
-
-Confirmed OAuth client injection, historical-only calls, sanitized typed errors, no secret persistence, bounded chunks, defensive normalization, per-date atomic storage/checkpointing, finite retry, safe resume/cancellation, and separated raw/intelligence/outcome methods. No analytical, outcome, CE/PE/WAIT, Live, Replay, SafetyGate, confidence, ranking, compression, manipulation, evidence, or positioning formulas were edited.
+Frozen stored intelligence is never recalculated; future facts only classify direction. Missing data stays unavailable. New provider calls are read-only and explicit. Secret fields are removed before persistence. Existing CE/PE/WAIT, confidence, validation, ranking, Live, Replay, and no-look-ahead logic were not edited. Behavioral tests cover classification, triggers, coverage, filters, options, capture, idempotence, failure isolation, and secrets.

@@ -23,3 +23,10 @@ Ordinary historical candles do not contain historical option-chain snapshots. Op
 
 ## Market Lake and Analytics refresh
 The manager reuses Market Lake request, manifest, local storage, enrichment, and outcome services. Raw/intelligence/outcome actions are separate. After mutation, only `historical_analytics_*` result/availability cache entries are invalidated. Analytics remains stored-data-only and runs only after the user clicks **Analyze Stored Data**; Live and Replay state are untouched.
+
+## Sprint 18.4D.2 expired-instrument contract verification (2026-08-02)
+The implementation follows the official **Get Expiries**, **Get Expired Option Contracts**, and **Get Expired Historical Candle Data** read-only contracts under `/v2/expired-instruments`. ITOS sends `instrument_key`; expiry discovery returns expiry values. Contract discovery additionally sends `expiry_date` and consumes expired instrument key, expiry, strike, and instrument/option type. Candle retrieval sends the expired instrument key, interval, `to_date`, and `from_date` and consumes candle arrays ordered timestamp, open, high, low, close, volume, and OI.
+
+Bearer authentication is required. ITOS supports the minute interval form used by the official expired-candle route and rejects malformed responses safely. The adapter makes no authenticated request during construction or normal tests. Provider date/interval limits and rate limits remain authoritative and errors are sanitized.
+
+Expired candle responses can provide volume and OI, each preserved as unavailable when absent. They do not provide a historical chain snapshot, bid/ask, spread, IV, or Greeks. ITOS therefore builds only a timestamp-aligned `PARTIAL_OPTION_REPLAY`; unavailable fields remain null and are displayed with explicit unavailable labels. Verification sources: Upstox Developer API documentation and official endpoint naming. A live documentation fetch was unavailable in the execution environment, so manual reconfirmation against the current official pages remains required before enabling production download.
