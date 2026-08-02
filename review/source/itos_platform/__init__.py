@@ -43,6 +43,10 @@ from .manipulation_intelligence import (
 )
 from .institutional_evidence import (EvidenceItem, InstitutionalEvidence,
     InstitutionalEvidenceEngine, InstitutionalEvidenceSettings)
+from .decision_confidence import (
+    ConfidencePillar, DecisionConfidence, DecisionConfidenceEngine,
+    DecisionConfidenceSettings,
+)
 
 __all__ = [
     "ManipulationIntelligence",
@@ -50,4 +54,6 @@ __all__ = [
     "ManipulationIntelligenceSettings",
     "EvidenceItem", "InstitutionalEvidence", "InstitutionalEvidenceEngine",
     "InstitutionalEvidenceSettings",
+    "ConfidencePillar", "DecisionConfidence", "DecisionConfidenceEngine",
+    "DecisionConfidenceSettings",
 ]

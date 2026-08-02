@@ -1,5 +1,6 @@
 # Test Report
-Behavioural tests cover aligned bullish evidence, conflict/trap handling, unavailable inputs, lower reliability for covering/unwinding, option-buying caveats, clamping, explainability and recommendation immutability. Existing pipeline tests also exercise compatibility mapping structurally.
+
+Behavioural tests were added for bands, unavailable inputs, ceilings, manipulation/trap blockers, contradictions, data quality, penalty deduplication, weight normalization, contribution determinism, context identity, immutability, narrative, readiness, and recommendation isolation.
 
 **pytest not executed by Codex — local validation required.**
 
