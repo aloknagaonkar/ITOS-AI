@@ -58,6 +58,9 @@ from dashboard_application_service import (
     DashboardApplicationService,
     DashboardDataUnavailable,
 )
+from itos_platform.replay import DataMode, HistoricalReplayProvider, SampleDataProvider
+from itos_platform.replay_ux import change_data_mode, initialize_replay_state
+from ui.replay_workspace import render_replay_workspace
 
 load_dotenv()
 st.set_page_config(
@@ -140,6 +143,42 @@ with st.sidebar:
 st.caption(
     "Same institutional terminal UI • Two-tab workflow • AI Trade Opportunity added below Key Market Summary"
 )
+initialize_replay_state(st.session_state)
+selected_mode = st.sidebar.selectbox(
+    "Data Mode", tuple(DataMode),
+    index=tuple(DataMode).index(st.session_state["replay_data_mode"]),
+    format_func=lambda value: value.value,
+)
+change_data_mode(st.session_state, selected_mode)
+workspace_options = ("Analyst Dashboard",) if selected_mode is DataMode.LIVE else ("Historical Replay", "Analyst Dashboard")
+workspace = st.sidebar.radio("Workspace", workspace_options, key="replay_selected_workspace")
+
+if selected_mode is not DataMode.LIVE and workspace == "Historical Replay":
+    def replay_provider_factory(mode: DataMode):
+        if mode is DataMode.SAMPLE_DATA:
+            return SampleDataProvider()
+        replay_token = st.session_state.get("access_token", env("UPSTOX_ACCESS_TOKEN"))
+        if not replay_token:
+            raise RuntimeError("Historical provider authentication is unavailable; live fallback is prohibited.")
+        client = UpstoxClient(replay_token)
+        return HistoricalReplayProvider(
+            lambda request: client.get_historical_candles(
+                request.instrument_key, from_date=request.trading_date.isoformat(),
+                to_date=request.trading_date.isoformat(), interval=request.interval_minutes,
+                unit="minutes",
+            ),
+            candle_source="upstox_historical",
+        )
+    render_replay_workspace(selected_mode, st.session_state, replay_provider_factory, UNDERLYINGS)
+    st.stop()
+if selected_mode is not DataMode.LIVE:
+    st.warning(f"**{selected_mode.value.replace('_', ' ')} MODE** — live acquisition is disabled.")
+    frozen = st.session_state.get("replay_frozen_result")
+    if frozen is None:
+        st.info("Run a replay point in the Historical Replay workspace before opening the Analyst Dashboard.")
+    else:
+        st.info("The frozen replay snapshot is retained. Return to Historical Replay to inspect it; no live data was loaded.")
+    st.stop()
 token = auth()
 
 if not token:
