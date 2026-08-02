@@ -1,2 +1,3 @@
 # Architecture Notes
-`itos_platform.market_lake` supplies the storage protocol and dependency-free local implementation. Atomic typed JSON is used instead of unavailable Parquet support. Provider fetchers and existing pipeline runners are injected, preserving no-live-fallback and preventing a second decision formula. Intelligence is engine-version partitioned and outcomes are a distinct layer.
+
+`UpstoxHistoricalSyncProvider` is an authentication-agnostic adapter over the existing client. `HistoricalSyncManager` owns planning, chunks, retries, partitioning, progress, and manifest checkpoints while delegating persistence/enrichment/outcomes to Market Lake services. Immutable plan/result/progress models cross the application boundary. Typed instrument and sync configuration centralize mappings and limits. Streamlit only composes authenticated runtime dependencies and invalidates its isolated Analytics namespace.

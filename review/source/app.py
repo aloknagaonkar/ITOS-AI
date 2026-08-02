@@ -65,6 +65,8 @@ from itos_platform.replay_ux import change_data_mode, initialize_replay_state
 from ui.replay_workspace import render_replay_workspace
 from ui.historical_analytics_workspace import render_historical_analytics_workspace
 from itos_platform.historical_analytics import WorkspaceMode
+from itos_platform.historical_sync import HistoricalSyncManager, UpstoxHistoricalSyncProvider
+from itos_platform.market_lake import LocalHistoricalMarketLake
 
 load_dotenv()
 st.set_page_config(
@@ -155,7 +157,11 @@ workspace_mode = st.sidebar.selectbox(
     format_func=lambda mode: mode.value.replace("_", " "),
 )
 if workspace_mode is WorkspaceMode.HISTORICAL_ANALYTICS:
-    render_historical_analytics_workspace(UNDERLYINGS)
+    historical_lake = LocalHistoricalMarketLake()
+    historical_provider = (UpstoxHistoricalSyncProvider(client=authenticated_client)
+                           if authenticated_client is not None else None)
+    render_historical_analytics_workspace(UNDERLYINGS, lake=historical_lake,
+        sync_manager=HistoricalSyncManager(provider=historical_provider, market_lake=historical_lake))
     st.stop()
 selected_mode = {
     WorkspaceMode.LIVE: DataMode.LIVE,
