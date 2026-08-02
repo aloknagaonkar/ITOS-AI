@@ -972,6 +972,20 @@ with tab_live:
             column.metric(label, value)
     else:
         st.caption("Institutional Evidence: Not available yet")
+    status_confidence = decision_confidence if decision_confidence is not None else None
+    if status_confidence and status_confidence.grade != "UNAVAILABLE":
+        confidence_status = [
+            ("Decision Confidence", f"{status_confidence.score:.0f}%"),
+            ("Grade", status_confidence.grade.replace("_", " ").title()),
+            ("Setup Quality", status_confidence.setup_quality.replace("_", " ").title()),
+            ("Ranking Ready", "Yes" if status_confidence.ranking_ready else "No"),
+            ("Primary Reason", status_confidence.primary_reason),
+            ("Primary Blocker", status_confidence.primary_blocker),
+        ]
+        for column, (label, value) in zip(st.columns(6), confidence_status):
+            column.metric(label, value)
+    else:
+        st.caption("Decision Confidence: Not available yet")
 
     with st.expander("Market Location & Transition", expanded=False):
         if market_location is None:
@@ -1156,6 +1170,42 @@ with tab_live:
                 for entry in entries or ("None identified.",): st.write(f"• {entry}")
             st.markdown("### Narrative")
             st.write(institutional_evidence.narrative)
+
+    with st.expander("Decision Confidence", expanded=False):
+        if decision_confidence is None or decision_confidence.grade == "UNAVAILABLE":
+            st.info("Decision confidence is unavailable.")
+        else:
+            st.markdown("### Summary")
+            confidence_summary = {
+                "Decision Confidence Score": f"{decision_confidence.score:.1f}/100",
+                "Grade": decision_confidence.grade.replace("_", " ").title(),
+                "Setup Quality": decision_confidence.setup_quality.replace("_", " ").title(),
+                "Ranking Ready": "Yes" if decision_confidence.ranking_ready else "No",
+                "Evidence Quality": f"{decision_confidence.evidence_quality:.1f}%",
+                "Confidence Ceiling": f"{decision_confidence.confidence_ceiling:.1f}",
+                "Critical Blocker Count": decision_confidence.critical_blocker_count,
+                "Contradiction Count": decision_confidence.contradiction_count,
+            }
+            st.table(pd.DataFrame(confidence_summary.items(), columns=["Measure", "Value"]))
+            st.markdown("### Pillars")
+            st.table(pd.DataFrame([{
+                "Pillar": pillar.label, "Score": pillar.score, "Weight": pillar.weight,
+                "Reliability": pillar.reliability, "Contribution": pillar.contribution,
+                "Explanation": pillar.explanation,
+                "Quality Flags": ", ".join(pillar.quality_flags) or "None",
+            } for pillar in decision_confidence.pillars]))
+            st.markdown("### Decision reasoning")
+            for title, entries, fallback in (
+                ("Why confidence increased", decision_confidence.contributors, "No strong contributor is confirmed."),
+                ("Why confidence decreased", decision_confidence.penalties, "No explicit penalty is present."),
+                ("What is missing", decision_confidence.missing_confirmations, "No material confirmation is missing."),
+                ("Quality Flags", decision_confidence.quality_flags, "None."),
+            ):
+                st.markdown(f"**{title}**")
+                for entry in entries or (fallback,):
+                    st.write(f"• {entry}")
+            st.markdown("**Narrative**")
+            st.write(decision_confidence.narrative)
 
     with st.expander("Institutional Metrics v2 Preview", expanded=False):
         if institutional_metrics is None:

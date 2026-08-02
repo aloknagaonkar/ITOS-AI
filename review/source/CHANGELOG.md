@@ -1,5 +1,11 @@
 # Changelog
 
+## Sprint 17A - Decision Confidence Engine v1
+
+- Added immutable Decision Confidence and seven pillar contracts with configuration-driven weights, penalties, ceilings, blockers, grades, setup quality, and ranking readiness.
+- Reused one shadow-only result through DecisionContext, DecisionPipeline, PipelineResults, DashboardApplicationResult, Market Status, and an additive dashboard panel.
+- Added deterministic behavioural coverage, rules documentation, roadmap status, and a modified-source review package without changing recommendations, live confidence, safety, strikes, or trade planning.
+
 ## Sprint 13 - Positioning Intelligence v1
 
 - Added immutable, explainable futures-style and options positioning classifications with evidence, contradictions, confidence, quality flags, and conservative safe degradation.

@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from .positioning_intelligence import PositioningIntelligence
     from .manipulation_intelligence import ManipulationIntelligence
     from .institutional_evidence import InstitutionalEvidence
+    from .decision_confidence import DecisionConfidence
 
 
 def recommendation_is_available(recommendation: Any) -> bool:
@@ -110,6 +111,7 @@ class DecisionContext:
     compression_intelligence: CompressionIntelligence | None = None
     manipulation_intelligence: ManipulationIntelligence | None = None
     institutional_evidence: InstitutionalEvidence | None = None
+    decision_confidence: DecisionConfidence | None = None
 
     def __post_init__(self) -> None:
         """Reconcile canonical fields with Sprint 2 constructor aliases."""
@@ -134,6 +136,7 @@ class DecisionContext:
             "compression_intelligence": "compression_intelligence",
             "manipulation_intelligence": "manipulation_intelligence",
             "institutional_evidence": "institutional_evidence",
+            "decision_confidence": "decision_confidence",
         }
         for field_name, result_name in result_fields.items():
             value = getattr(self, field_name)
