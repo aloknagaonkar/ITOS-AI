@@ -145,3 +145,10 @@
 - Added replay controls, actual-candle navigation, metadata diagnostics, isolated session state, frozen snapshots, deterministic sample scenarios, and separately revealed outcome previews.
 - Added immutable replay timeline/outcome contracts and deterministic behavioural specifications.
 - Preserved the existing Analyst Dashboard and CE/PE/WAIT decision contracts unchanged.
+
+## Sprint 18.4C — Historical Market Lake Foundation
+- Added an atomic, date-partitioned local Historical Market Lake with immutable raw, versioned intelligence, and separately versioned factual outcome layers.
+- Added incremental historical ingestion, point-in-time checkpointed enrichment, outcome enrichment, typed queries, availability reporting, and minimal developer status controls.
+- Added schema/engine manifests, corruption-safe reads, idempotent upserts, secret redaction, and behavioural coverage without changing CE/PE/WAIT logic or dashboard sections.
+- Hardened dashboard-result serialization for typed and attribute-based pipeline results, added redacted enrichment diagnostics, and clarified full-remainder-of-session MFE semantics.
+- Corrected the serialization boundary so typed provider identity persists while dashboard runtime provider/client objects remain excluded.
