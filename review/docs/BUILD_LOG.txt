@@ -1,6 +1,4 @@
-Sprint 18.4B build
-- Created feature/historical-replay-ux.
-- Added replay UX domain/state/navigation/outcome primitives.
-- Added additive Streamlit replay presentation adapter and app routing.
-- Added deterministic behavioural specifications.
+Sprint 18.4C build
+- Added market lake implementation and behavioural tests.
+- Added generated-data ignore rule and review package.
 - pytest intentionally NOT RUN; local validation required.

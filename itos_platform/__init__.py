@@ -72,3 +72,8 @@ __all__ = [
 from .replay import DataMode, ReplayMetadata, ReplayRequest
 
 __all__ = ["DataMode", "ReplayMetadata", "ReplayRequest"]
+"""ITOS platform contracts and intelligence services."""
+
+from .market_lake import MarketLakeSettings
+
+__all__ = ["MarketLakeSettings"]
