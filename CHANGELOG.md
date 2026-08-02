@@ -113,3 +113,14 @@
 - Added immutable, deterministic confidence-history validation for trend, stability, pillar agreement, readiness persistence, ranking eligibility, and material change detection.
 - Added shadow recommendation comparison, conservative missing-data degradation, and configuration-driven thresholds without changing live CE/PE/WAIT decisions.
 - Reused one validation result through DecisionContext, DecisionPipeline, PipelineResults, DashboardApplicationResult, Market Status, and the additive validation panel.
+# Sprint 18 — Trade Opportunity Ranking v1
+
+- Added immutable option-opportunity and trade-opportunity-ranking contracts.
+- Added a repository-free, configuration-driven ranking engine with eligibility,
+  normalization, liquidity/spread, activity, Greeks, IV, moneyness, expiry,
+  direction, manipulation and confidence evaluation.
+- Exposed one shared informational ranking through DecisionContext,
+  PipelineResults, DashboardApplicationResult and the additive dashboard panel.
+- Added deterministic behavioural coverage and a Sprint 18 review package.
+- The live CE/PE/WAIT recommendation, confidence, SafetyGatePolicy, legacy strike
+  ranking, Trade Planner and AI Trade Opportunity remain unchanged.

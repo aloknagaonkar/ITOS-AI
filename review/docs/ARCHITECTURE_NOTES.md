@@ -1,2 +1,3 @@
 # Architecture Notes
-The repository-free `DecisionConfidenceValidationEngine` runs immediately after `DecisionConfidenceEngine`. It consumes only `DecisionContext`, its injected history, and completed typed results. The frozen result is inserted once into `engine_results`, the typed context, `PipelineResults`, and the dashboard compatibility mapping. Streamlit displays fields but performs no validation calculations. Existing confidence history is adapted without a persistence-schema change.
+
+The `TradeOpportunityRankingEngine` runs after `DecisionConfidenceValidationEngine`. It receives only `DecisionContext`, performs no repository or Streamlit access, and returns frozen dataclasses. The exact result instance is installed into `DecisionContext.engine_results`, the typed context field, `PipelineResults`, and the dashboard compatibility mapping. The UI only renders fields; it performs no ranking. No recommendation or safety input consumes the ranking.

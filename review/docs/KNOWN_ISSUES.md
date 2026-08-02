@@ -1,4 +1,7 @@
 # Known Issues
-- Existing stored confidence history may not contain Sprint 17B pillar, blocker, or evidence-quality fields; validation intentionally lowers confidence until richer completed in-memory snapshots are injected.
-- UI runtime validation and pytest are deferred to local validation by sprint instruction.
-- Ranking eligibility is preparation only; opportunity and strike ranking remain unimplemented.
+
+- Ranking calibration has not yet been validated against historical outcomes.
+- Relative nearby-strike participation uses absolute conservative activity bands in v1; adaptive/index-specific calibration remains future work.
+- Expiry uses calendar DTE rather than exchange-session DTE.
+- Missing optional values lower component scores and grades, but are never fabricated.
+- UI runtime validation and pytest are intentionally deferred to local validation.

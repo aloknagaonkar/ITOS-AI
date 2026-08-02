@@ -1000,6 +1000,23 @@ with tab_live:
             column.metric(label, value)
     else:
         st.caption("Decision Confidence Validation: Not available yet")
+    status_ranking = trade_opportunity_ranking if trade_opportunity_ranking is not None else None
+    if status_ranking:
+        def status_contract(candidate):
+            return f"{candidate.strike:g} {candidate.option_type} — {candidate.opportunity_score:.0f}" if candidate else "None"
+        ranking_status = [
+            ("Option Ranking", status_ranking.ranking_state.replace("_", " ").title()),
+            ("Preferred Direction", status_ranking.preferred_direction.replace("_", " ").title()),
+            ("Best CE", status_contract(status_ranking.best_ce)),
+            ("Best PE", status_contract(status_ranking.best_pe)),
+            ("Best Overall", status_contract(status_ranking.best_overall)),
+        ]
+        for column, (label, value) in zip(st.columns(5), ranking_status):
+            column.metric(label, value)
+        if not status_ranking.ranking_eligible:
+            st.caption(f"Option Ranking Reason: {status_ranking.eligibility_reason}")
+    else:
+        st.caption("Option Ranking: Unavailable")
 
     with st.expander("Market Location & Transition", expanded=False):
         if market_location is None:
@@ -1271,6 +1288,61 @@ with tab_live:
                     st.write(f"• {entry}")
             st.markdown("**Narrative**")
             st.write(validation.narrative)
+
+    with st.expander("Trade Opportunity Ranking", expanded=False):
+        ranking = trade_opportunity_ranking
+        if ranking is None:
+            st.info("Trade opportunity ranking is unavailable.")
+        else:
+            def ranking_contract(candidate):
+                return f"{candidate.strike:g} {candidate.option_type} — {candidate.opportunity_score:.1f}" if candidate else "None"
+            ranking_summary = {
+                "Ranking State": ranking.ranking_state.replace("_", " ").title(),
+                "Ranking Eligible": "Yes" if ranking.ranking_eligible else "No",
+                "Eligibility Reason": ranking.eligibility_reason,
+                "Preferred Direction": ranking.preferred_direction,
+                "Institutional Bias": ranking.institutional_bias,
+                "Decision Confidence": f"{ranking.decision_confidence:.1f}%",
+                "Validation State": ranking.validation_state.replace("_", " ").title(),
+                "Evaluated Contracts": ranking.evaluated_count,
+                "Rejected Contracts": ranking.rejected_count,
+                "Best CE": ranking_contract(ranking.best_ce),
+                "Best PE": ranking_contract(ranking.best_pe),
+                "Best Overall": ranking_contract(ranking.best_overall),
+            }
+            st.table(pd.DataFrame(ranking_summary.items(), columns=["Measure", "Value"]))
+            if not ranking.ranking_eligible:
+                st.info(ranking.eligibility_reason)
+            else:
+                def opportunity_rows(candidates):
+                    return [{
+                        "Rank": index, "Strike": item.strike, "Expiry": item.expiry,
+                        "LTP": item.ltp, "Opportunity Score": item.opportunity_score,
+                        "Grade": item.grade, "Risk": item.risk_level, "Delta": item.delta,
+                        "Gamma": item.gamma, "Theta": item.theta, "IV": item.iv,
+                        "OI": item.oi, "Volume": item.volume, "Spread %": item.spread_percent,
+                        "Moneyness": item.moneyness,
+                        "Positive Reasons": " • ".join(item.positive_reasons) or "None",
+                        "Warnings": " • ".join(item.warnings) or "None",
+                        "Explanation": item.explanation,
+                    } for index, item in enumerate(candidates, 1)]
+                st.markdown("### Top CE Opportunities")
+                ce_rows = opportunity_rows(ranking.top_ce)
+                st.table(pd.DataFrame(ce_rows)) if ce_rows else st.info("No eligible CE contracts.")
+                st.markdown("### Top PE Opportunities")
+                pe_rows = opportunity_rows(ranking.top_pe)
+                st.table(pd.DataFrame(pe_rows)) if pe_rows else st.info("No eligible PE contracts.")
+                st.markdown("### Rejected-contract summary")
+                if ranking.rejection_reason_counts:
+                    st.table(pd.DataFrame(ranking.rejection_reason_counts, columns=["Reason", "Count"]))
+                    representatives = [
+                        {"Contract": f"{item.strike:g} {item.option_type}", "Reasons": " • ".join(item.rejection_reasons)}
+                        for item in ranking.rejected[:5]
+                    ]
+                    st.table(pd.DataFrame(representatives))
+                else:
+                    st.write("No rejected contracts.")
+            st.caption("Informational only — this ranking does not alter the live recommendation or existing strike selection.")
 
     with st.expander("Institutional Metrics v2 Preview", expanded=False):
         if institutional_metrics is None:

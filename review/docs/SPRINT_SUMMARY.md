@@ -1,2 +1,3 @@
-# Sprint 17B Summary
-Implemented configuration-driven Decision Confidence validation, history normalization, trend, stability, pillar agreement, readiness persistence, ranking eligibility, change tracking, blocker/penalty transitions, shadow comparison, typed pipeline exposure, behavioural tests, Market Status metrics, and an additive collapsed dashboard panel. The capability is informational only.
+# Sprint 18 Summary
+
+Sprint 18 adds a shadow-only, explainable ranking of up to five CE and five PE contracts. The immutable engine result is computed once after confidence validation and reused by the decision context, pipeline result, application mapping, Market Status, and the new collapsed dashboard panel. Existing recommendations, strike selection, safety, planner, AI opportunity, exports, downloads, and dashboard sections are unchanged.
