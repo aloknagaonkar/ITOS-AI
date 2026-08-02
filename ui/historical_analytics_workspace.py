@@ -24,6 +24,7 @@ from itos_platform.historical_trade_review import (
     export_csv as export_review_csv, export_json as export_review_json,
     filter_trade_reviews, trade_table_rows,
 )
+from itos_platform.historical_options import HistoricalOptionDownloadService
 
 PREFIX = "historical_analytics_"
 TRADE_PREFIX = "historical_trade_review_"
@@ -152,7 +153,7 @@ def _render_sync_result(result: object) -> None:
 
 def _developer_panel(lake: LocalHistoricalMarketLake, provider: str, request: HistoricalRangeRequest,
                      actions: MarketLakeActions, manager: HistoricalSyncManager | None,
-                     cadence: int) -> None:
+                     cadence: int, option_downloader: HistoricalOptionDownloadService | None) -> None:
     expanded = bool(st.session_state.get(PREFIX+"developer_open", False))
     with st.expander("Developer → Market Lake / Historical Data Manager", expanded=expanded):
         range_request = request
@@ -168,7 +169,38 @@ def _developer_panel(lake: LocalHistoricalMarketLake, provider: str, request: Hi
             "Completed dates": status.completed_dates, "Failed dates": status.failed_dates}
         st.dataframe(pd.DataFrame(details.items(), columns=("Property", "Value")), hide_index=True, use_container_width=True)
         st.caption("Recommended pilot: NIFTY, 1 minute, 1 week, 5-minute analysis cadence.")
-        st.info("Historical option-chain snapshots are unavailable for this sync. Records are CANDLE_ONLY_REPLAY.")
+        st.info("Historical expired-contract candles can be downloaded explicitly. Bid/ask, IV and Greeks remain unavailable; replay stays PARTIAL_OPTION_REPLAY.")
+        st.subheader("Historical Options")
+        if st.button("Discover Historical Option Expiries", key=PREFIX+"discover_option_expiries", disabled=option_downloader is None):
+            try: st.session_state[PREFIX+"option_expiries"] = option_downloader.discover_expiries(request.instrument_key)
+            except Exception as error: st.error(str(error))
+        expiries = tuple(st.session_state.get(PREFIX+"option_expiries", ()))
+        selected_expiry = st.selectbox("Expired option expiry", expiries, index=None,
+            placeholder="Discover and select an expiry", key=PREFIX+"option_expiry") if expiries else None
+        confirmed = st.checkbox("Confirm historical option download", value=False, key=PREFIX+"confirm_option_download")
+        if st.button("Download Historical Options", key=PREFIX+"download_historical_options",
+                     disabled=option_downloader is None or selected_expiry is None or not confirmed):
+            try:
+                option_result = option_downloader.download(request.instrument_key, request.start_date,
+                    request.end_date, expiry=selected_expiry)
+                st.session_state[PREFIX+"option_result"] = option_result
+                invalidate_historical_analytics_cache(st.session_state)
+                st.success("Historical option candles stored and option coverage refreshed.")
+            except Exception as error: st.error(str(error))
+        option_result = st.session_state.get(PREFIX+"option_result")
+        if option_result is not None:
+            option_details = {
+                "Expiries discovered": option_result.expiries_discovered,
+                "Contracts discovered": option_result.contracts_discovered,
+                "Contracts downloaded": option_result.contracts_stored,
+                "CE count": option_result.ce_count, "PE count": option_result.pe_count,
+                "Completed dates": option_result.completed_dates, "Partial dates": option_result.partial_dates,
+                "Failed contracts/dates": f"{option_result.failed_contracts} / {option_result.failed_dates}",
+                "OI coverage": f"{option_result.oi_coverage:.2f}%", "Volume coverage": f"{option_result.volume_coverage:.2f}%",
+                "Bid/ask": "Unavailable", "IV": "Unavailable", "Greeks": "Unavailable",
+                "Replay completeness": option_result.status,
+            }
+            st.dataframe(pd.DataFrame(option_details.items(), columns=("Option result", "Value")), hide_index=True)
         rebuild = st.columns(3)
         redownload = rebuild[0].checkbox("Re-download Raw Data", value=False, key=PREFIX+"redownload")
         rebuild_intel = rebuild[1].checkbox("Rebuild Intelligence", value=False, key=PREFIX+"rebuild_intelligence")
@@ -220,7 +252,8 @@ def _developer_panel(lake: LocalHistoricalMarketLake, provider: str, request: Hi
 
 def render_historical_analytics_workspace(underlyings: Mapping[str, str], *, provider: str = "upstox",
         lake: LocalHistoricalMarketLake | None = None, actions: MarketLakeActions = MarketLakeActions(),
-        sync_manager: HistoricalSyncManager | None = None) -> None:
+        sync_manager: HistoricalSyncManager | None = None,
+        option_downloader: HistoricalOptionDownloadService | None = None) -> None:
     """Render analytics without reading or writing replay/live session keys."""
     st.header("Historical Analytics")
     lake = lake or LocalHistoricalMarketLake(); service = HistoricalAnalyticsService(lake, provider=provider)
@@ -254,7 +287,7 @@ def render_historical_analytics_workspace(underlyings: Mapping[str, str], *, pro
         except ValueError as error: st.error(str(error))
     end = custom_end or date.today(); start, end = resolve_analytics_period(period, end, custom_start)
     manager_request = HistoricalRangeRequest(underlying, instrument, start, end, interval, include_options=False)
-    _developer_panel(lake, provider, manager_request, actions, sync_manager, cadence)
+    _developer_panel(lake, provider, manager_request, actions, sync_manager, cadence, option_downloader)
     result = st.session_state.get(PREFIX+"result")
     if not isinstance(result, HistoricalAnalyticsResult):
         st.info("Choose a range and click **Analyze Stored Data**. No data is downloaded automatically.")
@@ -268,7 +301,7 @@ def render_historical_analytics_workspace(underlyings: Mapping[str, str], *, pro
         "Date": row.trading_date, "Underlying Candles": "Yes" if row.underlying_candles else "—",
         "Option Contracts": "Yes" if row.option_contracts else "—", "Intelligence": "Yes" if row.intelligence else "—",
         "Outcomes": "Yes" if row.outcomes else "—", "Replay Completeness": row.replay_completeness,
-        "Status": row.status, "Action Required": row.action_required} for row in coverage_rows]),
+        "Session Classification": row.session_classification, "Status": row.status, "Action Required": row.action_required} for row in coverage_rows]),
         hide_index=True, use_container_width=True)
     st.caption("Downloads and builds run only after an explicit action in Developer → Market Lake.")
     action_columns = st.columns(4)
@@ -333,6 +366,9 @@ def render_historical_analytics_workspace(underlyings: Mapping[str, str], *, pro
         for trigger in selected.trigger_results:
             with st.expander(f"{trigger.display_name} — {trigger.status}",expanded=st.session_state.get(TRADE_PREFIX+"active_analysis_target")==trigger.analysis_target):
                 st.caption(f"Impact: {trigger.impact}")
+                st.markdown(f"**Reason:** {trigger.display_name} is {trigger.status}")
+                st.markdown(f"**Stored value:** {trigger.stored_value}")
+                st.markdown(f"**Rule applied:** {trigger.rule_applied}")
                 for evidence in trigger.evidence: st.markdown(f"- {evidence}")
                 if trigger.missing_requirement: st.warning("Missing requirement: "+trigger.missing_requirement)
                 if trigger.fix_required: st.info("Fix required: "+trigger.fix_required)

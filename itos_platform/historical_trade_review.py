@@ -61,6 +61,8 @@ class TriggerCheckResult:
     fix_required: str | None
     analysis_target: str
     quality_flags: tuple[str, ...] = ()
+    stored_value: str = "unavailable"
+    rule_applied: str = "No rule could be evaluated"
 
 
 @dataclass(frozen=True)
@@ -120,22 +122,50 @@ def classify_result(recommendation: str, outcome: HistoricalOutcomeRecord | None
 
 def build_trigger_checklist(record: HistoricalIntelligenceRecord, option_complete: bool) -> tuple[TriggerCheckResult, ...]:
     v = record.values
+    direction = 1 if record.recommendation == "BUY CE" else -1 if record.recommendation == "BUY PE" else 0
+    def directional(value: Any, *, positive: tuple[str, ...], negative: tuple[str, ...]) -> str:
+        text = str(value or "").upper().replace("-", "_").replace(" ", "_")
+        if not text: return "UNAVAILABLE"
+        aligned = any(token in text for token in (positive if direction > 0 else negative))
+        opposed = any(token in text for token in (negative if direction > 0 else positive))
+        if direction == 0: return "PARTIAL"
+        return "PASS" if aligned and not opposed else "FAIL" if opposed else "PARTIAL"
+    structure_value = _get(v, "market_regime.regime", record.market_bias)
+    positioning_value = record.positioning_state or _get(v, "positioning_intelligence.state")
+    institution_value = _get(v, "institutional_evidence.bias", record.market_bias)
+    structure_status = directional(structure_value, positive=("BULL",), negative=("BEAR",))
+    positioning_status = directional(positioning_value, positive=("LONG_BUILDUP", "LONG_BUILD_UP", "PUT_WRITING"), negative=("SHORT_BUILDUP", "SHORT_BUILD_UP", "CALL_WRITING"))
+    institution_status = directional(institution_value, positive=("BULL",), negative=("BEAR",))
+    compression = _get(v, "compression_intelligence")
+    releasing = _truth(v, "compression_intelligence.releasing", "compression_intelligence.release_ready")
+    expanding = _truth(v, "compression_intelligence.expansion", "compression_intelligence.expanding")
+    release_direction = _get(v, "compression_intelligence.release_direction", _get(v, "compression_intelligence.direction"))
+    compression_status = "UNAVAILABLE" if compression is None else directional(release_direction, positive=("UP", "BULL", "CE"), negative=("DOWN", "BEAR", "PE")) if (releasing or expanding) else "PARTIAL"
     unavailable = lambda key: _get(v, key) is None
     manipulation = any(_truth(v, f"manipulation_intelligence.{name}") for name in ("false_breakout", "false_breakdown", "bull_trap", "bear_trap", "liquidity_sweep"))
     target = "manipulation.false-breakout" if _truth(v, "manipulation_intelligence.false_breakout") else "manipulation"
     rows = [
-        ("market-structure", "Market Structure", "UNAVAILABLE" if unavailable("market_regime") else "PASS", (f"Stored bias: {record.market_bias or 'unavailable'}",), "Defines directional context", "Stored market structure", "Require a clear stored regime"),
+        ("market-structure", "Market Structure", structure_status, (f"Stored structure: {structure_value or 'unavailable'}",), "Supports frozen direction" if structure_status == "PASS" else "Does not support frozen direction", "Stored market structure", "Require structure aligned with the frozen recommendation"),
         ("price-volume", "Price & Volume", "UNAVAILABLE" if unavailable("volume_structure") else ("PASS" if _truth(v, "volume_structure.confirmed_expansion", "volume_structure.price_up_volume_up") else "PARTIAL"), (f"Volume behaviour: {_get(v, 'volume_structure.behaviour', 'unavailable')}",), "Confirms price participation", "Confirmed volume", "Wait for volume confirmation"),
-        ("positioning", "Positioning", "UNAVAILABLE" if record.positioning_state is None else "PASS", (f"Stored state: {record.positioning_state or 'unavailable'}",), "Supports or contradicts direction", "Stored positioning", "Require aligned positioning"),
-        ("compression", "Compression / Release", "UNAVAILABLE" if unavailable("compression_intelligence") else "PASS", (f"Stored state: {record.compression_state or 'available'}",), "Describes release readiness", None, None),
+        ("positioning", "Positioning", positioning_status, (f"Stored state: {positioning_value or 'unavailable'}",), "Supports frozen direction" if positioning_status == "PASS" else "Contradicts or does not confirm frozen direction", "Stored positioning", "Require aligned positioning"),
+        ("compression", "Compression / Release", compression_status, (f"Compression: {record.compression_state or 'present' if compression is not None else 'unavailable'}; release ready: {releasing}; expansion: {expanding}; release direction: {release_direction or 'unavailable'}",), "Release direction supports frozen direction" if compression_status == "PASS" else "Compression alone does not confirm a directional release", "Directional release evidence", "Require release readiness and a stored aligned direction"),
         (target, "Manipulation Safety", "FAIL" if manipulation else ("UNAVAILABLE" if unavailable("manipulation_intelligence") else "PASS"), tuple(name.replace('_',' ').title()+" detected" for name in ("false_breakout", "false_breakdown", "bull_trap", "bear_trap", "liquidity_sweep") if _truth(v, f"manipulation_intelligence.{name}")) or ("No stored manipulation flag",), "Directional entry blocked" if manipulation else "Checks trap risk", None, "Wait for genuine acceptance with confirming volume" if manipulation else None),
-        ("institutional-evidence", "Institutional Evidence", "UNAVAILABLE" if unavailable("institutional_evidence") else "PASS", (f"Stored bias: {_get(v, 'institutional_evidence.bias', 'unavailable')}",), "Tests institutional alignment", "Stored institutional evidence", "Require aligned evidence"),
+        ("institutional-evidence", "Institutional Evidence", institution_status, (f"Stored bias: {institution_value or 'unavailable'}",), "Supports frozen direction" if institution_status == "PASS" else "Contradicts or does not confirm frozen direction", "Stored institutional evidence", "Require evidence aligned with the frozen recommendation"),
         ("decision-confidence", "Decision Confidence", "UNAVAILABLE" if record.decision_confidence is None else ("PASS" if record.decision_confidence >= 70 else "PARTIAL"), (f"Frozen score: {record.decision_confidence if record.decision_confidence is not None else 'unavailable'}",), "Measures stored evidence strength", "Frozen confidence", "Require stronger confirmations"),
         ("decision-validation", "Validation", "FAIL" if record.blockers else ("PARTIAL" if record.missing_confirmations else "PASS"), tuple(record.blockers or record.missing_confirmations or ("No stored blocker",)), "Controls eligibility", None, "Resolve stored blockers" if record.blockers else None),
         ("trade-ranking", "Trade Ranking", "PASS" if record.ranking_eligibility else "PARTIAL", ("Ranking eligible" if record.ranking_eligibility else "Ranking unavailable or ineligible",), "Checks contract ranking readiness", None, "Require ranking eligibility" if not record.ranking_eligibility else None),
         ("option-data-coverage", "Option Liquidity / Data Completeness", "PASS" if option_complete else "UNAVAILABLE", ("Historical contract candles stored",) if option_complete else ("Historical bid/ask unavailable", "Historical IV unavailable", "Historical Greeks unavailable"), "Contract-level execution quality can be verified" if option_complete else "Contract-level execution quality cannot be verified", "Historical option data" if not option_complete else None, "Download officially supported historical option candles" if not option_complete else None),
     ]
-    return tuple(TriggerCheckResult(key, name, status, evidence, impact, missing, fix, key, () if status != "UNAVAILABLE" else ("DATA_UNAVAILABLE",)) for key,name,status,evidence,impact,missing,fix in rows)
+    rules = {
+        "market-structure": f"{record.recommendation}: bullish for BUY CE; bearish for BUY PE; WAIT is non-directional",
+        "positioning": f"{record.recommendation}: LONG_BUILDUP/PUT_WRITING support CE; SHORT_BUILDUP/CALL_WRITING support PE",
+        "compression": "PASS requires release readiness or expansion plus an aligned stored release direction",
+        "institutional-evidence": f"Institutional bias must align with {record.recommendation}",
+    }
+    return tuple(TriggerCheckResult(key, name, status, evidence, impact, missing, fix, key,
+        () if status != "UNAVAILABLE" else ("DATA_UNAVAILABLE",), "; ".join(evidence),
+        rules.get(key, f"Stored {name.lower()} rule evaluated without future outcome data"))
+        for key,name,status,evidence,impact,missing,fix in rows)
 
 
 def trigger_summary(triggers: Sequence[TriggerCheckResult]) -> str:
@@ -245,6 +275,7 @@ def export_json(reviews: Sequence[HistoricalTradeReview]) -> bytes:
 class CoverageRow:
     trading_date: date; underlying_candles: bool; option_contracts: bool; intelligence: bool; outcomes: bool
     replay_completeness: str; status: str; action_required: str
+    session_classification: str = "EXPECTED_WEEKDAY"
 
 
 def build_coverage_rows(manifest: DatasetManifest | None, expected_dates: Sequence[date]) -> tuple[CoverageRow, ...]:
@@ -260,5 +291,6 @@ def build_coverage_rows(manifest: DatasetManifest | None, expected_dates: Sequen
         elif d not in outcomes: status, action = "OUTCOMES_MISSING", "Build Missing Outcomes"
         elif d not in options: status, action = "PARTIAL_OPTIONS", "Download Historical Options"
         else: status, action = "COMPLETE", "None"
-        rows.append(CoverageRow(d,d in raw,d in options,d in intel,d in outcomes,"FULL_REPLAY" if d in options else "PARTIAL_OPTION_REPLAY",status,action))
+        rows.append(CoverageRow(d,d in raw,d in options,d in intel,d in outcomes,"FULL_REPLAY" if d in options else "PARTIAL_OPTION_REPLAY",status,action,
+            "NOT_TRADING_SESSION" if d in no_data else "CONFIRMED_TRADING_SESSION" if d in raw else "EXPECTED_WEEKDAY"))
     return tuple(rows)

@@ -243,6 +243,11 @@ class HistoricalAnalyticsService:
         expected = tuple(request.start_date + timedelta(days=index)
                          for index in range((request.end_date-request.start_date).days+1)
                          if (request.start_date+timedelta(days=index)).weekday() < 5)
+        # A provider-confirmed empty weekday is not evidence of missing raw data.
+        # In the absence of an official calendar it is retained as a separately
+        # classified non-session and excluded from completeness denominators.
+        no_data_dates = set(manifest.no_data_dates if manifest else ())
+        expected = tuple(day for day in expected if day not in no_data_dates)
         raw_dates = _sessions(manifest.available_dates if manifest else (), request)
         intel_dates = _sessions(manifest.intelligence_dates if manifest else (), request)
         outcome_dates = _sessions(manifest.outcome_dates if manifest else (), request)

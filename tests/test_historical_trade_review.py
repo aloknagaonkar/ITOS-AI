@@ -35,6 +35,23 @@ def test_checklist_has_ten_stable_groups_and_preserves_evidence():
     assert any("Historical bid/ask unavailable" in c.evidence for c in checks)
 
 def test_option_unavailable_is_not_pass(): assert build_trigger_checklist(record(),False)[-1].status=="UNAVAILABLE"
+@pytest.mark.parametrize("side,state,bias,expected",[("BUY CE","Short Build-up","Bearish","FAIL"),("BUY PE","Short Build-up","Bearish","PASS")])
+def test_directional_positioning_and_institutional_alignment(side,state,bias,expected):
+    r=record(side); values=dict(r.values); values["institutional_evidence"]={"bias":bias}
+    checks=build_trigger_checklist(replace(r,positioning_state=state,market_bias=bias,values=values),False)
+    assert next(x for x in checks if x.trigger_id=="positioning").status==expected
+    assert next(x for x in checks if x.trigger_id=="institutional-evidence").status==expected
+
+def test_wait_uses_blockers_without_forcing_direction():
+    r=replace(record("WAIT"),blockers=("Conflicting structure",))
+    checks=build_trigger_checklist(r,False)
+    assert next(x for x in checks if x.trigger_id=="market-structure").status=="PARTIAL"
+    assert next(x for x in checks if x.trigger_id=="decision-validation").status=="FAIL"
+
+def test_compression_presence_without_release_direction_is_not_pass():
+    check=next(x for x in build_trigger_checklist(record(),False) if x.trigger_id=="compression")
+    assert check.status=="UNAVAILABLE" or check.status=="PARTIAL"
+    assert "release direction" in check.rule_applied.lower()
 def test_all_pass_summary(): assert trigger_summary(tuple(TriggerCheckResult(str(i),str(i),"PASS",(),"",None,None,"market-structure") for i in range(3)))=="3/3 PASS"
 def test_blocking_summary_is_deterministic():
     values=dict(record().values); values["manipulation_intelligence"]={"false_breakout":True}

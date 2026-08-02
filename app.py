@@ -67,6 +67,8 @@ from ui.historical_analytics_workspace import render_historical_analytics_worksp
 from itos_platform.historical_analytics import WorkspaceMode
 from itos_platform.historical_sync import HistoricalSyncManager, UpstoxHistoricalSyncProvider
 from itos_platform.market_lake import LocalHistoricalMarketLake
+from itos_platform.historical_options import HistoricalOptionDownloadService
+from itos_platform.live_market_lake import LiveMarketLakeCaptureService, AfterMarketFinalizationService
 
 load_dotenv()
 st.set_page_config(
@@ -151,17 +153,20 @@ st.caption(
 )
 token = auth()
 authenticated_client = UpstoxClient(token) if token else None
+market_lake = LocalHistoricalMarketLake()
 initialize_replay_state(st.session_state)
 workspace_mode = st.sidebar.selectbox(
     "Top Level Mode", tuple(WorkspaceMode),
     format_func=lambda mode: mode.value.replace("_", " "),
 )
 if workspace_mode is WorkspaceMode.HISTORICAL_ANALYTICS:
-    historical_lake = LocalHistoricalMarketLake()
+    historical_lake = market_lake
     historical_provider = (UpstoxHistoricalSyncProvider(client=authenticated_client)
                            if authenticated_client is not None else None)
     render_historical_analytics_workspace(UNDERLYINGS, lake=historical_lake,
-        sync_manager=HistoricalSyncManager(provider=historical_provider, market_lake=historical_lake))
+        sync_manager=HistoricalSyncManager(provider=historical_provider, market_lake=historical_lake),
+        option_downloader=(HistoricalOptionDownloadService(authenticated_client, historical_lake)
+                           if authenticated_client is not None else None))
     st.stop()
 selected_mode = {
     WorkspaceMode.LIVE: DataMode.LIVE,
@@ -224,9 +229,12 @@ with st.sidebar:
     )
 
 should_load = run or (auto_refresh and expiry is not None)
-dashboard_service = DashboardApplicationService(
-    warning=st.warning, client=authenticated_client,
-)
+capture_service = st.session_state.get("live_market_lake_capture_service")
+if capture_service is None:
+    capture_service = LiveMarketLakeCaptureService(market_lake)
+    st.session_state["live_market_lake_capture_service"] = capture_service
+dashboard_service = DashboardApplicationService(warning=st.warning, client=authenticated_client,
+    capture_service=capture_service)
 dashboard_result = None
 try:
     if should_load:
@@ -282,6 +290,27 @@ if dashboard_result is None:
 if dashboard_result.values.get("data_unavailable"):
     st.warning(dashboard_result.warning)
     st.stop()
+
+with st.sidebar.expander("Developer → Market Lake", expanded=False):
+    st.subheader("Live Capture Status")
+    capture_status = capture_service.status
+    st.dataframe(pd.DataFrame({"Property": (
+        "Enabled", "Cadence minutes", "Last raw snapshot", "Last option snapshot",
+        "Last frozen intelligence", "Session status", "Capture errors"), "Value": (
+        capture_status.enabled, capture_status.cadence_minutes,
+        capture_status.last_raw_snapshot_stored or "—", capture_status.last_option_snapshot_stored or "—",
+        capture_status.last_intelligence_record_stored or "—", capture_status.current_session_status,
+        "; ".join(capture_status.capture_errors) or "None")}), hide_index=True)
+    st.caption("Capture stores the already-frozen Live result and never recalculates the pipeline.")
+    if st.button("Finalize Today", key="market_lake_finalize_today", use_container_width=True):
+        finalization = AfterMarketFinalizationService(market_lake).finalize(
+            UNDERLYINGS[underlying], timeframe, date.today(), "live-decision-pipeline")
+        st.session_state["market_lake_finalization"] = finalization
+    finalization = st.session_state.get("market_lake_finalization")
+    if finalization is not None:
+        st.write(f"**Finalization:** {finalization.status}")
+        st.caption(f"Outcomes built: {finalization.outcomes_built}; session complete: {finalization.session_complete}")
+        for diagnostic in finalization.diagnostics: st.info(diagnostic)
 
 # Preserve the variable names consumed by the unchanged presentation layer.
 globals().update(dashboard_result.values)

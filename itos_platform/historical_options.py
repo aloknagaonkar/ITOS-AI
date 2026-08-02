@@ -21,6 +21,9 @@ class ExpiredOptionClient(Protocol):
 class HistoricalOptionDownloadResult:
     expiries_discovered: int; contracts_discovered: int; contracts_stored: int
     failed_contracts: int; status: str; explanations: tuple[str, ...] = ()
+    ce_count: int = 0; pe_count: int = 0
+    completed_dates: tuple[date, ...] = (); partial_dates: tuple[date, ...] = ()
+    failed_dates: tuple[date, ...] = (); oi_coverage: float = 0.0; volume_coverage: float = 0.0
 
 
 class HistoricalOptionDownloadService:
@@ -28,11 +31,20 @@ class HistoricalOptionDownloadService:
     def __init__(self, client: ExpiredOptionClient, lake: LocalHistoricalMarketLake, *, provider: str = "upstox"):
         self.client, self.lake, self.provider = client, lake, provider
 
-    def download(self, instrument_key: str, start_date: date, end_date: date) -> HistoricalOptionDownloadResult:
+    def discover_expiries(self, instrument_key: str) -> tuple[str, ...]:
+        try:
+            return tuple(str(value) for value in self.client.get_expired_option_expiries(instrument_key))
+        except Exception:
+            raise HistoricalProviderError("Upstox expired-option provider unavailable.") from None
+
+    def download(self, instrument_key: str, start_date: date, end_date: date, *, expiry: str | None = None) -> HistoricalOptionDownloadResult:
         if start_date > end_date: raise ValueError("start_date must be on or before end_date")
-        try: expiries = tuple(self.client.get_expired_option_expiries(instrument_key))
-        except Exception: raise HistoricalProviderError("Upstox expired-option provider unavailable.") from None
-        discovered = stored = failed = 0
+        expiries = self.discover_expiries(instrument_key)
+        if expiry is not None:
+            if expiry not in expiries: raise ValueError("Selected expiry was not discovered for this instrument.")
+            expiries = (expiry,)
+        discovered = stored = failed = ce = pe = oi_present = volume_present = observations = 0
+        completed_days: set[date] = set(); partial_days: set[date] = set(); failed_days: set[date] = set()
         for expiry_text in expiries:
             try: expiry = date.fromisoformat(str(expiry_text)); contracts = tuple(self.client.get_expired_option_contracts(instrument_key, expiry_text))
             except (ValueError, TypeError): continue
@@ -53,11 +65,20 @@ class HistoricalOptionDownloadService:
                             "bid": None, "ask": None, "iv": None, "greeks": None,
                             "replay_completeness": "PARTIAL_OPTION_REPLAY"} for row in frame.itertuples()]
                         self.lake.store_option_snapshots(self.provider, instrument_key, expiry, day, frame.iloc[-1]["timestamp"].to_pydatetime(), records)
+                        partial_days.add(day)
+                        observations += len(records)
+                        oi_present += sum(item["oi"] is not None for item in records)
+                        volume_present += sum(item["volume"] is not None for item in records)
                     stored += 1
-                except (HistoricalMalformedResponseError, Exception): failed += 1
+                    ce += side == "CE"; pe += side == "PE"
+                except (HistoricalMalformedResponseError, Exception):
+                    failed += 1; failed_days.update(date.fromordinal(value) for value in range(start_date.toordinal(), end_date.toordinal()+1))
         status = "PARTIAL_OPTION_REPLAY" if stored else "UNAVAILABLE"
         return HistoricalOptionDownloadResult(len(expiries), discovered, stored, failed, status,
-            ("Expired candles do not provide historical bid/ask, IV, or Greeks.",))
+            ("Expired candles do not provide historical bid/ask, IV, or Greeks.",), ce, pe,
+            tuple(sorted(completed_days)), tuple(sorted(partial_days)), tuple(sorted(failed_days)),
+            round(100*oi_present/observations, 2) if observations else 0.0,
+            round(100*volume_present/observations, 2) if observations else 0.0)
 
 
 def derive_historical_option_chain(records: Sequence[Mapping[str, Any]]) -> pd.DataFrame:
