@@ -41,9 +41,13 @@ from .manipulation_intelligence import (
     ManipulationIntelligenceEngine,
     ManipulationIntelligenceSettings,
 )
+from .institutional_evidence import (EvidenceItem, InstitutionalEvidence,
+    InstitutionalEvidenceEngine, InstitutionalEvidenceSettings)
 
 __all__ = [
     "ManipulationIntelligence",
     "ManipulationIntelligenceEngine",
     "ManipulationIntelligenceSettings",
+    "EvidenceItem", "InstitutionalEvidence", "InstitutionalEvidenceEngine",
+    "InstitutionalEvidenceSettings",
 ]
