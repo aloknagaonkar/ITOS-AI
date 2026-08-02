@@ -1,10 +1,3 @@
-# Files Changed — Sprint 18.4D
+# Files Changed
 
-- `app.py` — typed top-level workspace routing.
-- `itos_platform/historical_analytics.py` — immutable analytics requests/results, Market Lake-only query service, aggregates, drill-down, and exports.
-- `ui/historical_analytics_workspace.py` — isolated controls, coverage, cards, drill-down, exports, and Developer → Market Lake UI.
-- `tests/test_historical_analytics.py` — behavioral Historical Analytics coverage.
-- `review/docs/HISTORICAL_ANALYTICS_RULES.md` — analytics invariants and boundaries.
-- Sprint review documents and `CHANGELOG.md` — 18.4D status and validation record.
-
-Modified source files are mirrored under `review/source/`. The Historical Market Lake foundation was not modified.
+See the committed Git diff. Added `itos_platform/historical_sync.py`, its behavioral test suite, sync rules, and review-source copies. Modified `app.py`, `upstox_client.py`, `ui/historical_analytics_workspace.py`, `CHANGELOG.md`, and requested review documentation. Review source contains only production/test/configuration/change-log files modified for this sprint.

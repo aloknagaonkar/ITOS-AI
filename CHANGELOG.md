@@ -159,3 +159,9 @@
 - Added period/filter controls, independent coverage reporting, aggregate dashboard concepts, per-section drill-down, and filtered CSV/JSON export.
 - Added a collapsed Developer → Market Lake panel wired through explicit existing-service callbacks; analysis never downloads, replays, enriches, or executes the Decision Pipeline.
 - Preserved Live, Historical Replay, Sample Data, and existing CE/PE/WAIT behavior.
+
+## Sprint 18.4D.1 — Upstox Historical Sync Manager
+- Added injected authenticated Historical Candle V3 adapter with sanitized typed errors and no Live fallback.
+- Added typed instrument/settings, immutable plans/results/progress, bounded chunking, normalization, missing-date storage, checkpoints, finite retry, cancellation, and resume.
+- Added separate raw sync, intelligence enrichment, and factual outcome actions plus Historical Analytics developer controls and scoped cache invalidation.
+- Added deterministic fake-based behavioral/security tests and review documentation; analytical formulas and CE/PE/WAIT are unchanged.
