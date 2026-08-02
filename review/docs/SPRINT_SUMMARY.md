@@ -1,2 +1,2 @@
-# Sprint Summary
-Sprint 18.4D.2 adds a trader-facing Historical Dashboard and Trade Review: visual coverage, frozen-record directional classifications, traceable triggers/reasons, filtered exports and deep dives, expired-option partial replay, live Market Lake capture, and explicit finalization. Trading formulas and Live/Replay decision paths are unchanged.
+# Sprint Summary — 18.4E
+Implemented an internal, additive Historical Intelligence Index: deterministic identities, decision-time fingerprints, normalized vectors, independent version registries, SQLite retrieval, incremental maintenance, cache invalidation, and an initial semantic relationship graph. Similarity/pattern discovery, execution decisions, UI work, and changes to existing analytical/trading behavior are explicitly deferred.

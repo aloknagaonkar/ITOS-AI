@@ -5,3 +5,4 @@ __pycache__/
 .venv/
 data/historical/
 data/market_lake/
+data/market_lake/index/

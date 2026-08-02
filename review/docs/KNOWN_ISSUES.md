@@ -1,5 +1,5 @@
 # Known Issues
-- Expired candles cannot reconstruct historical bid/ask, IV, Greeks, or a complete exchange option-chain snapshot.
-- Official documentation pages could not be fetched through the environment proxy; production enablement requires manual reconfirmation of current Upstox limits/rates.
-- No background scheduler is included; live capture/finalization are scheduler-ready service contracts.
-- Manual interactive Streamlit validation remains required.
+- The graph is intentionally preliminary token overlap, not Sprint 18.4F similarity scoring.
+- Statistics recomputation is bounded by configured maximum query size; callers should partition very large datasets.
+- Automatic live/enrichment index hooks are configuration-ready but disabled by default to avoid changing existing capture behavior.
+- Manual UI validation remains required; no normal UI files were changed.
