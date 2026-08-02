@@ -1,3 +1,2 @@
 # Future Recommendations
-
-Deferred beyond Sprint 17A: Decision Confidence validation, outcome calibration, history persistence, trend tracking (improving/stable/weakening), Trade Opportunity Ranking, Top 5 CE and PE candidate scoring, strike scoring, Trade Readiness Index, Executive Trade Cockpit, historical learning, trade-plan integration, and any live recommendation or automated-execution influence.
+Deferred: Trade Opportunity Ranking; Top 5 CE and PE Opportunities; Strike Opportunity Score; Trade Readiness Index; Executive Trade Cockpit; historical outcome validation; confidence calibration from outcomes; adaptive/ML weights; persistence-schema redesign; and any dashboard cleanup or redesign. Sprint 18 should consume `ranking_eligible` without bypassing blockers and must remain separate from strike selection until explicitly scoped.

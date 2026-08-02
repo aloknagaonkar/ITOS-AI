@@ -108,3 +108,8 @@
 - Added an immutable, deterministic institutional evidence aggregation with directional scores, quality, confidence, themes, contradictions, missing confirmations, and narrative.
 - Reused one shadow-only result across DecisionContext, DecisionPipeline, PipelineResults, DashboardApplicationResult, Market Status, and the additive Institutional Evidence panel.
 - Preserved recommendation, confidence, safety-gate, strike-selection, planning, persistence, export, and execution behaviour.
+
+## Sprint 17B — Decision Confidence Validation & Ranking Readiness v1
+- Added immutable, deterministic confidence-history validation for trend, stability, pillar agreement, readiness persistence, ranking eligibility, and material change detection.
+- Added shadow recommendation comparison, conservative missing-data degradation, and configuration-driven thresholds without changing live CE/PE/WAIT decisions.
+- Reused one validation result through DecisionContext, DecisionPipeline, PipelineResults, DashboardApplicationResult, Market Status, and the additive validation panel.

@@ -1,5 +1,4 @@
-$ python -m py_compile app.py itos_platform/__init__.py itos_platform/decision_context.py itos_platform/decision_pipeline.py review/source/app.py review/source/itos_platform/__init__.py review/source/itos_platform/decision_context.py review/source/itos_platform/decision_pipeline.py itos_platform/decision_confidence.py review/source/itos_platform/decision_confidence.py review/source/tests/test_decision_confidence.py tests/test_decision_confidence.py
-exit_code=0
-
+$ python -m py_compile app.py itos_platform/__init__.py itos_platform/decision_context.py itos_platform/decision_pipeline.py itos_platform/decision_confidence_validation.py tests/test_decision_confidence_validation.py review/source/app.py review/source/itos_platform/__init__.py review/source/itos_platform/decision_context.py review/source/itos_platform/decision_pipeline.py review/source/itos_platform/decision_confidence_validation.py review/source/tests/test_decision_confidence_validation.py
+exit: 0 (no output)
 $ git diff --check
-exit_code=0
+exit: 0 (no output)
