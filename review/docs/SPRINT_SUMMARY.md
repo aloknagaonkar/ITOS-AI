@@ -1,6 +1,5 @@
-# Sprint 18.4C Summary
-Implemented the persistent Historical Market Lake foundation: typed models/configuration, atomic local partitions, normalized/raw/options storage, manifests, incremental sync, point-in-time enrichment with checkpoints, separate factual outcomes, typed queries, availability, and a developer status service. Existing recommendation formulas and Analyst Dashboard sections were not modified.
+# Sprint 18.4D — Historical Analytics
 
-Follow-up hardening accepts mapping, dataclass, enum, timestamp, numpy, and public-attribute results while excluding runtime collaborators and secret-like fields. Enrichment now returns redacted failure diagnostics. Outcome tests and rules explicitly define direction-neutral MFE over all future session candles after the frozen cutoff.
+Implemented a typed, isolated Historical Analytics workspace that reads persisted Historical Market Lake intelligence and outcomes only. It provides all standard and custom periods, stored-data filters, coverage diagnostics, deterministic aggregates of existing dashboard concepts, factual outcome summaries, per-section drill-down, CSV/JSON export, and a collapsed Developer → Market Lake panel.
 
-Persistence follow-up separates typed-storage serialization from dashboard runtime sanitization, preserving provider identity while redacting secrets in both contexts.
+Live, Historical Replay, Sample Data, the Decision Pipeline, provider/download behavior, and CE/PE/WAIT recommendation logic are unchanged. Incomplete data is reported and is never downloaded, rebuilt, or fabricated during analysis.
