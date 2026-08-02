@@ -65,6 +65,7 @@ class DashboardApplicationService:
         clock: Callable[[], str] | None = None,
         pipeline_factory: Callable[[], DecisionPipeline] = DecisionPipeline,
         provider: MarketDataProvider | None = None,
+        client: Any | None = None,
     ) -> None:
         self.client_factory = client_factory
         self.store_factory = store_factory
@@ -72,6 +73,7 @@ class DashboardApplicationService:
         self.clock = clock or (lambda: time.strftime("%H:%M:%S"))
         self.pipeline_factory = pipeline_factory
         self.provider = provider
+        self.client = client
 
     def execute(
         self, *, token: str, instrument_key: str, underlying: str, expiry: str,
@@ -96,7 +98,7 @@ class DashboardApplicationService:
             session_state["last_refresh"] = str(provider_snapshot.analysis_timestamp or "")
             should_load = False
         if should_load:
-            client = self.client_factory(token)
+            client = self.client or self.client_factory(token)
             raw_chain = client.get_option_chain(instrument_key, expiry)
             full_df = client.option_chain_to_dataframe(raw_chain)
             option_result = analyse_market(full_df, strikes)

@@ -3,10 +3,12 @@ from datetime import date, datetime, timezone
 import pandas as pd
 import pytest
 
+from dashboard_application_service import DashboardApplicationService
 from itos_platform.replay import (
     CachedHistoricalCandleLoader, CandleCache, DataMode, HistoricalOptionStatus,
     HistoricalReplayProvider, ReplayCompleteness, ReplayRequest, ReplaySettings,
     SampleDataProvider, filter_history_at_cutoff, normalize_candles,
+    ReplayAuthenticationUnavailable, build_upstox_historical_replay_provider,
 )
 
 
@@ -180,3 +182,117 @@ def test_candle_cache_keys_are_isolated_by_source_instrument_interval_and_day(tm
         frame = pd.DataFrame({"timestamp": ["2026-07-30 10:00"], "close": [marker]})
         cache.write(*key, frame)
     assert [cache.read(*key).loc[0, "close"] for key in keys] == list(range(5))
+
+
+def test_authenticated_provider_cache_hit_does_not_require_client(tmp_path):
+    settings = ReplaySettings(cache_root=tmp_path)
+    cache = CandleCache(settings)
+    cache.write("upstox_historical", request().instrument_key, request().trading_date,
+                request().interval_minutes, candles())
+    provider = build_upstox_historical_replay_provider(
+        None, cache=cache, settings=settings,
+    )
+
+    snapshot = provider.build_market_snapshot(request=request())
+
+    assert not snapshot.historical_candles.empty
+    assert snapshot.replay_metadata.candle_source == "upstox_historical"
+
+
+def test_authenticated_provider_cache_miss_uses_injected_live_client(tmp_path):
+    calls = []
+
+    class AuthenticatedClient:
+        access_token = "never-persist-this"
+        timeout = 37
+
+        def get_historical_candles(self, instrument, **kwargs):
+            calls.append((self, instrument, kwargs))
+            return candles()
+
+        def get_intraday_candles(self, *_args, **_kwargs):
+            raise AssertionError("live fallback must never be invoked")
+
+    client = AuthenticatedClient()
+    live_service = DashboardApplicationService(client=client)
+    settings = ReplaySettings(cache_root=tmp_path)
+    cache = CandleCache(settings)
+    provider = build_upstox_historical_replay_provider(
+        client, cache=cache, settings=settings,
+    )
+
+    provider.build_market_snapshot(request=request())
+
+    assert live_service.client is client
+    assert len(calls) == 1 and calls[0][0] is live_service.client
+    assert calls[0][2]["unit"] == "minutes"
+    assert cache.read("upstox_historical", request().instrument_key,
+                      request().trading_date, request().interval_minutes) is not None
+
+
+def test_live_service_prefers_same_explicitly_injected_client():
+    calls = []
+
+    class ExpectedStop(RuntimeError):
+        pass
+
+    class Client:
+        def get_option_chain(self, instrument, expiry):
+            calls.append((self, instrument, expiry))
+            raise ExpectedStop
+
+    client = Client()
+    service = DashboardApplicationService(
+        client=client,
+        client_factory=lambda _token: (_ for _ in ()).throw(
+            AssertionError("a second client must not be constructed")
+        ),
+    )
+
+    with pytest.raises(ExpectedStop):
+        service.execute(
+            token="not-observed", instrument_key=request().instrument_key,
+            underlying=request().underlying, expiry="2026-08-06", timeframe=5,
+            strikes=8, save_snapshots=False, history_hours=1,
+            should_load=True, session_state={},
+        )
+
+    assert calls == [(client, request().instrument_key, "2026-08-06")]
+
+
+def test_authenticated_provider_cache_miss_without_client_is_explicit(tmp_path, caplog):
+    token = "must-not-appear-anywhere"
+    settings = ReplaySettings(cache_root=tmp_path)
+    provider = build_upstox_historical_replay_provider(
+        None, cache=CandleCache(settings), settings=settings,
+    )
+
+    with pytest.raises(ReplayAuthenticationUnavailable) as captured:
+        provider.build_market_snapshot(request=request())
+
+    assert str(captured.value) == (
+        "Historical provider authentication is unavailable; "
+        "live fallback is prohibited."
+    )
+    assert token not in str(captured.value)
+    assert token not in caplog.text
+
+
+def test_replay_identity_and_metadata_never_include_access_token(tmp_path):
+    token = "sensitive-replay-token"
+
+    class Client:
+        access_token = token
+
+        def get_historical_candles(self, *_args, **_kwargs):
+            return candles()
+
+    settings = ReplaySettings(cache_root=tmp_path)
+    cache = CandleCache(settings)
+    snapshot = build_upstox_historical_replay_provider(
+        Client(), cache=cache, settings=settings,
+    ).build_market_snapshot(request=request())
+    cache_paths = tuple(str(path) for path in tmp_path.rglob("*"))
+
+    assert token not in repr(snapshot.replay_metadata)
+    assert all(token not in path for path in cache_paths)

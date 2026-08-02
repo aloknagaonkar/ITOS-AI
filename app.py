@@ -58,6 +58,11 @@ from dashboard_application_service import (
     DashboardApplicationService,
     DashboardDataUnavailable,
 )
+from itos_platform.replay import (
+    DataMode, SampleDataProvider, build_upstox_historical_replay_provider,
+)
+from itos_platform.replay_ux import change_data_mode, initialize_replay_state
+from ui.replay_workspace import render_replay_workspace
 
 load_dotenv()
 st.set_page_config(
@@ -141,7 +146,32 @@ st.caption(
     "Same institutional terminal UI • Two-tab workflow • AI Trade Opportunity added below Key Market Summary"
 )
 token = auth()
+authenticated_client = UpstoxClient(token) if token else None
+initialize_replay_state(st.session_state)
+selected_mode = st.sidebar.selectbox(
+    "Data Mode", tuple(DataMode),
+    index=tuple(DataMode).index(st.session_state["replay_data_mode"]),
+    format_func=lambda value: value.value,
+)
+change_data_mode(st.session_state, selected_mode)
+workspace_options = ("Analyst Dashboard",) if selected_mode is DataMode.LIVE else ("Historical Replay", "Analyst Dashboard")
+workspace = st.sidebar.radio("Workspace", workspace_options, key="replay_selected_workspace")
 
+if selected_mode is not DataMode.LIVE and workspace == "Historical Replay":
+    def replay_provider_factory(mode: DataMode):
+        if mode is DataMode.SAMPLE_DATA:
+            return SampleDataProvider()
+        return build_upstox_historical_replay_provider(authenticated_client)
+    render_replay_workspace(selected_mode, st.session_state, replay_provider_factory, UNDERLYINGS)
+    st.stop()
+if selected_mode is not DataMode.LIVE:
+    st.warning(f"**{selected_mode.value.replace('_', ' ')} MODE** — live acquisition is disabled.")
+    frozen = st.session_state.get("replay_frozen_result")
+    if frozen is None:
+        st.info("Run a replay point in the Historical Replay workspace before opening the Analyst Dashboard.")
+    else:
+        st.info("The frozen replay snapshot is retained. Return to Historical Replay to inspect it; no live data was loaded.")
+    st.stop()
 if not token:
     st.info("Enter an Upstox access token. A read-only Analytics Token is the simplest choice.")
     st.stop()
@@ -159,7 +189,7 @@ with st.sidebar:
 
     expiry = None
     try:
-        expiry_client = UpstoxClient(token)
+        expiry_client = authenticated_client
         available_expiries = expiry_client.get_option_expiries(UNDERLYINGS[underlying])
         expiry = st.selectbox(
             "Active expiry",
@@ -179,7 +209,9 @@ with st.sidebar:
     )
 
 should_load = run or (auto_refresh and expiry is not None)
-dashboard_service = DashboardApplicationService(warning=st.warning)
+dashboard_service = DashboardApplicationService(
+    warning=st.warning, client=authenticated_client,
+)
 dashboard_result = None
 try:
     if should_load:
