@@ -926,6 +926,7 @@ with tab_live:
     status_location = market_location if market_location is not None else None
     status_volume = volume_structure if volume_structure is not None else None
     status_positioning = positioning_intelligence if positioning_intelligence is not None else None
+    status_compression = compression_intelligence if compression_intelligence is not None else None
     flow_meta = getattr(flow_result, "metadata", {}) or {}
     status_values = [
         ("Location", getattr(status_location, "zone", "Unavailable")),
@@ -945,6 +946,18 @@ with tab_live:
     ]
     for column, (label, value) in zip(st.columns(10), status_values):
         column.metric(label, str(value).replace("_", " ").title())
+    compression_status_values = [
+        ("Compression", status_compression.display_label if status_compression and status_compression.state != "UNAVAILABLE" else "Not available yet"),
+        ("Energy Stored", f"{status_compression.energy_stored:.0f}%" if status_compression and status_compression.state != "UNAVAILABLE" else "Not available yet"),
+        ("Expansion Readiness", f"{status_compression.expansion_readiness:.0f}%" if status_compression and status_compression.state != "UNAVAILABLE" else "Not available yet"),
+        ("Direction", status_compression.direction if status_compression else "UNKNOWN"),
+    ]
+    for column, (label, value) in zip(st.columns(4), compression_status_values):
+        column.metric(label, str(value).replace("_", " ").title())
+    if status_compression and status_compression.state != "UNAVAILABLE":
+        st.progress(int(status_compression.energy_stored), text="Energy stored (informational only)")
+        st.progress(int(status_compression.expansion_readiness), text="Expansion readiness (informational only)")
+        st.caption(f"({status_compression.meaning}) Direction is not a trade signal.")
 
     with st.expander("Market Location & Transition", expanded=False):
         if market_location is None:
@@ -1039,6 +1052,48 @@ with tab_live:
             st.write("**Quality Flags:** " + (", ".join(positioning_intelligence.quality_flags) or "None"))
             for explanation in positioning_intelligence.explanations:
                 st.write(f"• {explanation}")
+
+    with st.expander("Compression Intelligence", expanded=False):
+        if compression_intelligence is None or compression_intelligence.state == "UNAVAILABLE":
+            st.info("Compression intelligence is unavailable.")
+            if compression_intelligence is not None:
+                st.caption("Quality flags: " + (", ".join(compression_intelligence.quality_flags) or "None"))
+        else:
+            st.markdown(f"### {compression_intelligence.display_label}")
+            st.write(f"**Meaning:** ({compression_intelligence.meaning})")
+            summary_columns = st.columns(5)
+            summary_columns[0].metric("Compression Score", f"{compression_intelligence.compression_score:.0f}%")
+            summary_columns[1].metric("Energy Stored", f"{compression_intelligence.energy_stored:.0f}%")
+            summary_columns[2].metric("Expansion Readiness", f"{compression_intelligence.expansion_readiness:.0f}%")
+            summary_columns[3].metric("Directional Lean", compression_intelligence.direction.replace("_", " ").title())
+            summary_columns[4].metric("Confidence", f"{compression_intelligence.confidence:.0f}%")
+            st.markdown("**Components**")
+            components = {
+                "ATR Compression": compression_intelligence.atr_compression_score,
+                "Range Compression": compression_intelligence.range_compression_score,
+                "Candle-spread Compression": compression_intelligence.candle_spread_compression_score,
+                "Volume Compression": compression_intelligence.volume_compression_score,
+                "Volatility Compression": compression_intelligence.volatility_compression_score,
+                "Time Compression": compression_intelligence.time_compression_score,
+                "OI Build-up": compression_intelligence.oi_build_score,
+            }
+            st.table(pd.DataFrame(((key, "Unavailable" if value is None else f"{value:.0f}/100") for key, value in components.items()), columns=["Component", "Score"]))
+            st.markdown("**Raw diagnostics**")
+            diagnostics = {
+                "Recent ATR": compression_intelligence.recent_atr, "Baseline ATR": compression_intelligence.baseline_atr,
+                "ATR Ratio": compression_intelligence.atr_ratio, "Recent Range": compression_intelligence.recent_range,
+                "Baseline Range": compression_intelligence.baseline_range, "Range Ratio": compression_intelligence.range_ratio,
+                "Recent Volume": compression_intelligence.recent_volume, "Baseline Volume": compression_intelligence.baseline_volume,
+                "Relative Volume": compression_intelligence.relative_volume, "Compression Duration": compression_intelligence.compression_duration,
+            }
+            st.table(pd.DataFrame(((key, "Unavailable" if value is None else value) for key, value in diagnostics.items()), columns=["Diagnostic", "Value"]))
+            st.markdown("**What is happening / What it may imply**")
+            for explanation in compression_intelligence.explanations: st.write(f"• {explanation}")
+            st.markdown("**Evidence used**")
+            for item in compression_intelligence.evidence or ("No confirming evidence is available yet.",): st.write(f"• {item}")
+            st.markdown("**Contradictions**")
+            for item in compression_intelligence.contradictions or ("None identified.",): st.write(f"• {item}")
+            st.write("**Quality Flags:** " + (", ".join(compression_intelligence.quality_flags) or "None"))
 
     with st.expander("Institutional Metrics v2 Preview", expanded=False):
         if institutional_metrics is None:

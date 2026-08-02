@@ -1,3 +1,5 @@
-# Sprint 13 Summary — Positioning Intelligence v1
+# Sprint 14 Summary
 
-Sprint 13 adds immutable futures-style and options positioning classifications, cautious meanings and market-impact descriptions, evidence, contradictions, quality flags, and configuration-driven confidence. One result is calculated after Institutional Metrics, Market Location, and Volume Structure and is reused by DecisionContext, PipelineResults, DashboardApplicationResult, Market Status, and the additive dashboard panel. The feature is informational only; recommendation, confidence, safety, strikes, planning, persistence, and execution are unchanged.
+Compression Intelligence v1 adds a frozen typed result and repository-free engine after Market Location, Volume Structure, and Positioning Intelligence. It distinguishes ordinary non-compression, tightening, possible release, and expansion already in progress. The result is informational only and is passed unchanged through the decision and dashboard layers.
+
+Dashboard additions are an Energy Meter within Market Status and a collapsed **Compression Intelligence** expander between Positioning Intelligence and Institutional Metrics v2 Preview. Existing panels, exports, downloads, session outputs, recommendation controls, trade planning, and safety behavior are preserved.
