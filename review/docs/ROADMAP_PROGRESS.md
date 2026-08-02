@@ -1,30 +1,22 @@
-# Roadmap Progress — Sprint 13
+# Roadmap Progress
 
 ## Features added from the missing list
-Positioning Intelligence v1 is now added: immutable typed states, futures and options classification, human meanings, market impacts, evidence, contradictions, quality flags, confidence, pipeline reuse, safe degradation, dashboard panel, and Market Status summary.
+Liquidity Sweep, Stop Hunt, False Breakout, False Breakdown, Bull Trap, Bear Trap, Breakout Quality, Follow-through Quality, Manipulation Probability and Trap Severity.
 
-## What remains missing
-Compression Intelligence, Manipulation Intelligence, Institutional Evidence, Decision Confidence Index, trade-planner changes, Market Narrative, historical learning, automated execution, strike rotation/rollover, Wyckoff labels, ORB, Fibonacci, and liquidity-sweep trade rules remain deferred.
+## Remaining missing features
+Institutional Evidence, Decision Confidence Index, Trade Opportunity Ranking, Top 5 CE opportunities, Top 5 PE opportunities, Trade Readiness Index, Executive Trade Cockpit, Market Narrative, and Historical Validation and Learning.
 
 ## Dashboard additions
-An additive **Positioning Intelligence** expander appears below **Price & Volume Behaviour** and above **Institutional Metrics v2 Preview**. Market Status additively exposes Positioning and Meaning. No existing dashboard section, export, or download was deleted, renamed, relocated, or collapsed.
+An additive manipulation summary in Market Status and a collapsed-by-default Manipulation Intelligence panel below Compression Intelligence and above Institutional Metrics v2 Preview.
 
 ## Decision impact
-None. The new result is informational and is not read by recommendation, existing confidence, SafetyGatePolicy, AITradeEngine, strike selection, or trade planning.
+None. Sprint 15 is informational only and does not alter CE/PE/WAIT, existing confidence or safety logic.
+
+## Ranking and cockpit progress
+The typed result supplies future ranking/cockpit diagnostics, but Top 5 CE/PE ranking and Executive Trade Cockpit remain unimplemented.
 
 ## Next sprint
-A future approved sprint may address Compression Intelligence; Manipulation Intelligence and all other deferred items remain out of scope until explicitly authorized.
+Institutional Evidence.
 
 ## Updated Master Feature Register
-| Feature | Status | Decision influence |
-|---|---|---|
-| Market Location & Transition | Existing | Existing behaviour unchanged |
-| Volume Structure v1 | Existing (Sprint 12) | Informational only |
-| Positioning Intelligence v1 | Added in Sprint 13 | Informational only |
-| Positioning dashboard and Market Status fields | Added in Sprint 13 | Informational only |
-| Compression Intelligence | Missing / deferred | None |
-| Manipulation Intelligence | Missing / deferred | None |
-| Institutional Evidence | Missing / deferred | None |
-| Decision Confidence Index | Missing / deferred | None |
-| Market Narrative / historical learning | Missing / deferred | None |
-| Trade Planner changes / automated execution | Missing / deferred | None |
+Completed previously: Market Location/Transition; Price and Volume Direction/Strength/Confirmation; Effort versus Result; Accumulation, Distribution, Expansion, Absorption, Exhaustion; Futures and Options Positioning; Compression, Energy Stored and Expansion Readiness. Completed now: all ten Sprint 15 items listed above. Remaining items are listed in the remaining-features section.

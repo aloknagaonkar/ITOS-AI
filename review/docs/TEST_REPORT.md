@@ -1,14 +1,17 @@
-# Sprint 13 Test Report
+# Test Report
 
-Deterministic behavioural coverage was added for futures matrices, neutral/missing/proxy data, writing and buying confirmation, conflicts, liquidity, IV, Greeks, premium data, location and volume context, malformed inputs, confidence clamping, immutability, and dashboard-facing contracts.
+Behavioural tests were added in `tests/test_manipulation_intelligence.py` for genuine moves, failed moves, sweeps, traps, rejection, follow-through, context agreement/contradiction, malformed inputs, immutable/clamped output, instance parity and recommendation neutrality.
+
+The failed-acceptance cases now assert false-breakout/false-breakdown identity
+independently from liquidity sweeps. Dedicated upside and downside sweep fixtures
+must exceed the unchanged production rejection threshold, and a regression test
+proves that a valid false breakdown need not be a liquidity sweep.
 
 **pytest not executed by Codex — local validation required.**
 
-Local validation commands:
+Required local validation:
 
-- `python -m pytest -q`
-- `streamlit run app.py`
-
-## Follow-up correction
-
-The two missing-context behavioural cases now remove each dependency from both its named `DecisionContext` field and `engine_results` before analysis, and assert the dependency is genuinely absent. A separate DecisionContext contract test proves restoration occurs when the mapping contains a value and absence is preserved when both representations omit it.
+```text
+python -m pytest -q
+streamlit run app.py
+```

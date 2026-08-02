@@ -36,3 +36,14 @@ __all__ = [
     "PositioningState",
     "recommendation_is_available",
 ]
+from .manipulation_intelligence import (
+    ManipulationIntelligence,
+    ManipulationIntelligenceEngine,
+    ManipulationIntelligenceSettings,
+)
+
+__all__ = [
+    "ManipulationIntelligence",
+    "ManipulationIntelligenceEngine",
+    "ManipulationIntelligenceSettings",
+]

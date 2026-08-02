@@ -92,3 +92,8 @@
 - Reused one informational `VolumeStructure` through the decision context, pipeline results, compatibility mapping, and dashboard.
 - Added Market Status and Price & Volume Behaviour displays without changing recommendation, confidence, safety, planning, or execution logic.
 - Hardened Sprint 12 OHLC envelope validation, configurable confirmation evidence, exhaustion-window scoring, and unavailable dashboard presentation.
+
+## Sprint 15 — Manipulation Intelligence v1
+- Added immutable, explainable manipulation intelligence covering failed acceptance, liquidity sweeps, stop-hunt evidence, trap risks, wick/rejection, breakout quality, follow-through quality, probability, and severity.
+- Integrated one shared informational result through DecisionContext, DecisionPipeline, PipelineResults, DashboardApplicationResult, Market Status, and a new additive dashboard panel.
+- Added conservative configuration, safe degradation, behavioural coverage, and the Sprint 15 review package. Recommendations, confidence, safety gates, strike selection, and trade planning are unchanged.
