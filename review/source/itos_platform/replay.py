@@ -215,6 +215,41 @@ class CachedHistoricalCandleLoader:
         return source_copy.copy(deep=True)
 
 
+class ReplayAuthenticationUnavailable(RuntimeError):
+    """Raised when an archive cache miss cannot use an authenticated client."""
+
+
+def build_upstox_historical_replay_provider(
+    client: Any | None,
+    *,
+    cache: Any | None = None,
+    settings: ReplaySettings = ReplaySettings(),
+) -> "HistoricalReplayProvider":
+    """Build a cache-first provider with an explicitly injected Upstox client."""
+    source = "upstox_historical"
+
+    def fetch(request: ReplayRequest) -> pd.DataFrame:
+        if client is None:
+            raise ReplayAuthenticationUnavailable(
+                "Historical provider authentication is unavailable; "
+                "live fallback is prohibited."
+            )
+        return client.get_historical_candles(
+            request.instrument_key,
+            from_date=request.trading_date.isoformat(),
+            to_date=request.trading_date.isoformat(),
+            interval=request.interval_minutes,
+            unit="minutes",
+        )
+
+    loader = CachedHistoricalCandleLoader(
+        fetch, cache if cache is not None else CandleCache(settings), source=source,
+    )
+    return HistoricalReplayProvider(
+        loader, settings=settings, candle_source=source,
+    )
+
+
 class HistoricalCandleDownloader:
     def __init__(self, client: Any, max_days_per_request: int = 30) -> None:
         self.client, self.max_days = client, max_days_per_request
