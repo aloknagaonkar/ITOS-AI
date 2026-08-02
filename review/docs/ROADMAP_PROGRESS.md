@@ -1,30 +1,19 @@
-# Roadmap Progress — Sprint 13
+# Roadmap Progress
 
-## Features added from the missing list
-Positioning Intelligence v1 is now added: immutable typed states, futures and options classification, human meanings, market impacts, evidence, contradictions, quality flags, confidence, pipeline reuse, safe degradation, dashboard panel, and Market Status summary.
+## Features Added from the Missing List
+ATR Compression, Range Compression, Candle-spread Compression, Volume Compression, Volatility Compression, Time Compression, OI Build-up during Compression, Compression Score, Energy Stored, and Expansion Readiness. Previously completed items remain Market Location/Transition; Price and Volume Direction/Strength/Relative Volume/Confirmation; Accumulation, Distribution, Expansion, Absorption, Exhaustion; Long/Short Build-up, Short Covering, Long Unwinding; and Put/Call Writing/Buying.
 
-## What remains missing
-Compression Intelligence, Manipulation Intelligence, Institutional Evidence, Decision Confidence Index, trade-planner changes, Market Narrative, historical learning, automated execution, strike rotation/rollover, Wyckoff labels, ORB, Fibonacci, and liquidity-sweep trade rules remain deferred.
+## Remaining Missing Features
+Manipulation Intelligence, Liquidity Sweep Intelligence, Bull Trap/Bear Trap Intelligence, Institutional Evidence, Decision Confidence Index, Trade Planner, Market Narrative, Confirmation Checklist, and Historical Validation and Learning.
 
-## Dashboard additions
-An additive **Positioning Intelligence** expander appears below **Price & Volume Behaviour** and above **Institutional Metrics v2 Preview**. Market Status additively exposes Positioning and Meaning. No existing dashboard section, export, or download was deleted, renamed, relocated, or collapsed.
+## Dashboard Additions
+Additive Market Status Energy Meter and collapsed Compression Intelligence panel. No existing dashboard section was deleted, renamed, or moved. Existing exports and downloads remain available.
 
-## Decision impact
-None. The new result is informational and is not read by recommendation, existing confidence, SafetyGatePolicy, AITradeEngine, strike selection, or trade planning.
+## Decision Impact
+None. Compression is informational only and does not participate in BUY CE, BUY PE, WAIT, confidence, SafetyGatePolicy, AI Trade Opportunity, strike selection, or trade planning.
 
-## Next sprint
-A future approved sprint may address Compression Intelligence; Manipulation Intelligence and all other deferred items remain out of scope until explicitly authorized.
+## Next Sprint
+Sprint 15: Manipulation Intelligence.
 
 ## Updated Master Feature Register
-| Feature | Status | Decision influence |
-|---|---|---|
-| Market Location & Transition | Existing | Existing behaviour unchanged |
-| Volume Structure v1 | Existing (Sprint 12) | Informational only |
-| Positioning Intelligence v1 | Added in Sprint 13 | Informational only |
-| Positioning dashboard and Market Status fields | Added in Sprint 13 | Informational only |
-| Compression Intelligence | Missing / deferred | None |
-| Manipulation Intelligence | Missing / deferred | None |
-| Institutional Evidence | Missing / deferred | None |
-| Decision Confidence Index | Missing / deferred | None |
-| Market Narrative / historical learning | Missing / deferred | None |
-| Trade Planner changes / automated execution | Missing / deferred | None |
+Sprint 14 compression components are **Complete (informational v1)**. Manipulation, sweep/trap validation, institutional evidence, decision confidence, narrative/checklist, planning evolution, and learning remain **Planned**.

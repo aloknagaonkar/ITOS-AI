@@ -1,5 +1,12 @@
 # Changelog
 
+## Sprint 14 - Compression Intelligence v1
+
+- Added an immutable, direction-neutral compression model covering ATR, rolling range, candle spread, volume, return volatility, time in range, and optional OI build-up.
+- Added distinct compression, energy-stored, and expansion-readiness scores plus cautious release/expansion states, evidence, contradictions, explanations, and quality flags.
+- Reused one informational-only result across DecisionContext, DecisionPipeline, PipelineResults, DashboardApplicationResult, Market Status, and the additive Compression Intelligence panel without changing recommendations or safety.
+- Added behavioural contracts, formula/configuration documentation, and the Sprint 14 modified-source review package.
+
 ## Sprint 13 - Positioning Intelligence v1
 
 - Added immutable, explainable futures-style and options positioning classifications with evidence, contradictions, confidence, quality flags, and conservative safe degradation.

@@ -7,6 +7,7 @@ from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from .compression_intelligence import CompressionIntelligence
     from .institutional_metrics import InstitutionalMetrics
     from .market_location import MarketLocation
     from .volume_structure import VolumeStructure
@@ -104,6 +105,7 @@ class DecisionContext:
     market_location: MarketLocation | None = None
     volume_structure: VolumeStructure | None = None
     positioning_intelligence: PositioningIntelligence | None = None
+    compression_intelligence: CompressionIntelligence | None = None
 
     def __post_init__(self) -> None:
         """Reconcile canonical fields with Sprint 2 constructor aliases."""
@@ -125,6 +127,7 @@ class DecisionContext:
             "market_location": "market_location",
             "volume_structure": "volume_structure",
             "positioning_intelligence": "positioning_intelligence",
+            "compression_intelligence": "compression_intelligence",
         }
         for field_name, result_name in result_fields.items():
             value = getattr(self, field_name)

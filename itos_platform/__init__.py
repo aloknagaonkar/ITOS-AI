@@ -15,6 +15,10 @@ from .positioning_intelligence import (
     PositioningIntelligence, PositioningIntelligenceEngine,
     PositioningIntelligenceSettings, PositioningState,
 )
+from .compression_intelligence import (
+    CompressionIntelligence, CompressionIntelligenceEngine,
+    CompressionIntelligenceSettings,
+)
 __all__ = [
     "DataProvider",
     "DecisionContext",
@@ -34,5 +38,8 @@ __all__ = [
     "PositioningIntelligenceEngine",
     "PositioningIntelligenceSettings",
     "PositioningState",
+    "CompressionIntelligence",
+    "CompressionIntelligenceEngine",
+    "CompressionIntelligenceSettings",
     "recommendation_is_available",
 ]

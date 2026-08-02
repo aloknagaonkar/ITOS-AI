@@ -1,6 +1,7 @@
-# Sprint 13 Known Issues
+# Known Issues
 
-- Many live providers do not currently supply explicit futures OI change, so futures positioning can remain unavailable unless that field is present or an explicit proxy is enabled.
-- Option premium change aliases must be present for writing/buying confirmation; otherwise the engine intentionally stays neutral or unavailable with a quality flag.
-- Strike-level dominant activity is described only by aggregate evidence in v1; rotation and rollover logic remain deferred.
-- UI and pytest validation are intentionally reserved for local validation.
+- Expansion readiness is a deterministic heuristic, not a calibrated breakout probability.
+- OI availability depends on the provider summary; proxy OI is explicitly flagged and confidence-capped.
+- The engine uses completed rows supplied by the caller and cannot independently prove that a provider's last row is closed.
+- Return volatility is price-based; option IV is deliberately not blended into it.
+- UI and full pytest validation remain local-validation responsibilities.
