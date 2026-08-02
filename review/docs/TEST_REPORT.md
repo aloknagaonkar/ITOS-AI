@@ -1,6 +1,6 @@
-# Test Report
-Codex did not run pytest, as explicitly required. Developer baseline before Sprint 18.4C: **444 passed in 6.71s**. Only `py_compile` and `git diff --check` were run. Local validation is required.
+# Test Report — Sprint 18.4D
 
-Follow-up validation remains limited to the requested `py_compile` and `git diff --check` commands. Pytest was not run; the developer-reported pre-fix result was 2 failed, 448 passed.
-
-Persistence-boundary follow-up validation remains limited to the two explicitly requested commands. Pytest was not run; the developer-reported pre-fix result was 4 failed, 453 passed.
+- Codex did not run pytest.
+- Developer baseline before 18.4D: **462 passed in 6.56s**.
+- Local validation required.
+- Validation is limited to `python -m py_compile` for all modified Python files and `git diff --check`, as requested.
