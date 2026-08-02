@@ -1,28 +1,19 @@
 # Roadmap Progress
 
-## 1. Features added from the missing list
-Decision Confidence Index, grade, setup quality, seven pillar scores, contributors, penalties, missing confirmations, data/manipulation/contradiction deductions, ceilings/floor, critical blockers, deterministic narrative, and ranking readiness.
+## Features added from the missing list
+Confidence Trend, Confidence Stability, Pillar Agreement, Readiness Persistence, Ranking Eligibility, Confidence Change Drivers, New/Resolved Blocker Detection, New/Resolved Penalty Detection, and Shadow Recommendation Comparison.
 
-## 2. Remaining missing features
-Trend/history, improving/stable/weakening state, outcome calibration, Trade Opportunity Ranking, Top 5 CE/PE, Trade Readiness Index, Executive Trade Cockpit, and historical validation/learning.
+## Remaining missing features
+Trade Opportunity Ranking, Top 5 CE Opportunities, Top 5 PE Opportunities, Strike Opportunity Score, Trade Readiness Index, Executive Trade Cockpit, Historical Outcome Validation, and Confidence Calibration from Outcomes.
 
-## 3. Dashboard additions
-An additive Market Status summary and collapsed Decision Confidence panel below Institutional Evidence and above Institutional Metrics v2 Preview.
+## Dashboard additions and decision impact
+Added six Market Status validation metrics and the collapsed Decision Confidence Validation panel. Decision impact is none: output remains informational and does not alter live recommendation confidence or CE/PE/WAIT.
 
-## 4. Decision impact
-None: shadow-only and separate from recommendation confidence and SafetyGatePolicy.
+## Ranking-readiness progress
+History persistence, coherence, blockers, and stability now gate a typed eligibility result suitable as a Sprint 18 input. Trade Opportunity Ranking itself is next sprint.
 
-## 5. Progress toward Trade Opportunity Ranking
-Setup eligibility now has a typed, explainable gate; candidate scoring remains unimplemented.
+## Top 5 CE/PE and cockpit progress
+Top 5 CE/PE ranking and the Executive Trade Cockpit are not started; no strike scoring was added.
 
-## 6. Progress toward Top 5 CE/PE
-No candidate or strike ranking was added. Decision Confidence supplies future ranking eligibility only.
-
-## 7. Progress toward Executive Trade Cockpit
-A reusable confidence summary exists; cockpit aggregation and redesign remain deferred.
-
-## 8. Next sprint: Decision Confidence Validation
-Validate thresholds on historical outcomes, investigate calibration, and preserve shadow-only operation until explicitly approved.
-
-## 9. Updated Master Feature Register
-Completed: all previously listed intelligence layers plus Decision Confidence, grades, setup quality, pillars, reasoning, and ranking readiness. Planned: validation/trends/history/calibration, ranking, Top 5 CE/PE, readiness index, cockpit, and learning.
+## Updated Master Feature Register
+Completed previously: Market Location/Transition, Price & Volume, Positioning, Compression/Energy/Expansion Readiness, Manipulation Intelligence, Institutional Evidence, Decision Confidence Index/Grade/Setup Quality/Ranking Readiness/Contributors/Penalties/Missing Confirmations. Completed this sprint: all validation features listed above. Next: Trade Opportunity Ranking.

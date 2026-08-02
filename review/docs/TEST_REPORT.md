@@ -1,6 +1,5 @@
 # Test Report
-
-Behavioural tests were added for bands, unavailable inputs, ceilings, manipulation/trap blockers, contradictions, data quality, penalty deduplication, weight normalization, contribution determinism, context identity, immutability, narrative, readiness, and recommendation isolation.
+Behavioural tests cover trends, degradation, stability bands, pillar coherence, readiness persistence, eligibility, changes, canonical deduplication, shadow alignment, immutability, and decision preservation.
 
 **pytest not executed by Codex — local validation required.**
 

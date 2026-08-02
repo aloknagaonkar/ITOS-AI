@@ -1,3 +1,2 @@
-# Sprint 17A Summary
-
-Sprint 17A introduces an immutable, explainable Decision Confidence result answering how trustworthy the current analytical setup is before CE/PE candidate ranking. Seven independently visible pillars aggregate clarity and reliability. Configuration-driven penalties, ceilings, blockers, grade, setup quality, and ranking readiness are informational and shadow-only. One result instance travels through the typed context, pipeline results, compatibility mapping, Market Status, and the new additive panel. Recommendation, SafetyGatePolicy, AI Trade Opportunity, strike selection, planning, and live confidence remain unchanged.
+# Sprint 17B Summary
+Implemented configuration-driven Decision Confidence validation, history normalization, trend, stability, pillar agreement, readiness persistence, ranking eligibility, change tracking, blocker/penalty transitions, shadow comparison, typed pipeline exposure, behavioural tests, Market Status metrics, and an additive collapsed dashboard panel. The capability is informational only.

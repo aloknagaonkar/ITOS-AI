@@ -36,6 +36,9 @@ from .compression_intelligence import CompressionIntelligence
 from .manipulation_intelligence import ManipulationIntelligence, ManipulationIntelligenceEngine
 from .institutional_evidence import InstitutionalEvidence, InstitutionalEvidenceEngine
 from .decision_confidence import DecisionConfidence, DecisionConfidenceEngine
+from .decision_confidence_validation import (
+    DecisionConfidenceValidation, DecisionConfidenceValidationEngine,
+)
 from .safety_gate_policy import SafetyDecision, SafetyGatePolicy
 
 
@@ -73,6 +76,7 @@ class PipelineResults:
     institutional_metrics: InstitutionalMetrics | None = None
     institutional_evidence: InstitutionalEvidence | None = None
     decision_confidence: DecisionConfidence | None = None
+    decision_confidence_validation: DecisionConfidenceValidation | None = None
 
     @property
     def ice_result(self) -> Any:
@@ -111,6 +115,7 @@ class DecisionPipeline:
         "InstitutionalConfidenceEngine", "SignalValidationEngine", "EarlyWarningEngine",
         "MarketRegimeEngine", "InstitutionalEvidenceEngine", "SmartMoneyIndexEngine",
         "MarketEnergyEngine", "DataHealthEngine", "DecisionConfidenceEngine",
+        "DecisionConfidenceValidationEngine",
     )
 
     def __init__(
@@ -121,6 +126,7 @@ class DecisionPipeline:
         manipulation_intelligence_engine: ManipulationIntelligenceEngine | None = None,
         institutional_evidence_engine: InstitutionalEvidenceEngine | None = None,
         decision_confidence_engine: DecisionConfidenceEngine | None = None,
+        decision_confidence_validation_engine: DecisionConfidenceValidationEngine | None = None,
     ) -> None:
         self.safety_policy = safety_policy or SafetyGatePolicy()
         self.institutional_metrics_engine = (
@@ -130,6 +136,9 @@ class DecisionPipeline:
         self.manipulation_intelligence_engine = manipulation_intelligence_engine or ManipulationIntelligenceEngine()
         self.institutional_evidence_engine = institutional_evidence_engine or InstitutionalEvidenceEngine()
         self.decision_confidence_engine = decision_confidence_engine or DecisionConfidenceEngine()
+        self.decision_confidence_validation_engine = (
+            decision_confidence_validation_engine or DecisionConfidenceValidationEngine()
+        )
 
     def execute(self, context: DecisionContext) -> PipelineResults:
         recommendation = context.recommendation
@@ -266,7 +275,12 @@ class DecisionPipeline:
             context, "decision_confidence", decision_confidence,
             decision_confidence=decision_confidence,
         )
-        return PipelineResults(cycle_result, stability_result, transition_result, pattern_result, readiness_result, radar_result, story_result, candle_dna_result, smart_candle_result, structure_result, market_location, volume_structure, positioning_intelligence, compression_intelligence, footprint_result, false_breakout_result, manipulation_intelligence, confirmation_result, decision_matrix_result, flow_result, institutional_confidence_result, validation_result, early_warning_result, regime_result, smart_money_result, energy_result, data_health_result, context, safety_decision, institutional_metrics, institutional_evidence, decision_confidence)
+        decision_confidence_validation = self.decision_confidence_validation_engine.analyze(context)
+        context = self._with_result(
+            context, "decision_confidence_validation", decision_confidence_validation,
+            decision_confidence_validation=decision_confidence_validation,
+        )
+        return PipelineResults(cycle_result, stability_result, transition_result, pattern_result, readiness_result, radar_result, story_result, candle_dna_result, smart_candle_result, structure_result, market_location, volume_structure, positioning_intelligence, compression_intelligence, footprint_result, false_breakout_result, manipulation_intelligence, confirmation_result, decision_matrix_result, flow_result, institutional_confidence_result, validation_result, early_warning_result, regime_result, smart_money_result, energy_result, data_health_result, context, safety_decision, institutional_metrics, institutional_evidence, decision_confidence, decision_confidence_validation)
 
     @staticmethod
     def _with_result(
