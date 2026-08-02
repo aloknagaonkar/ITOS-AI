@@ -1,7 +1,4 @@
 # Test Report
+Codex did not run pytest, as explicitly required. Developer baseline before Sprint 18.4C: **444 passed in 6.71s**. Only `py_compile` and `git diff --check` were run. Local validation is required.
 
-Codex did not run pytest, as explicitly required by the sprint validation policy.
-
-Developer local baseline before Sprint 18.4B: **415 passed in 5.95s**.
-
-Only Python compilation of modified Python files and `git diff --check` were run. Local validation, including the new behavioural test suite, is required.
+Follow-up validation remains limited to the requested `py_compile` and `git diff --check` commands. Pytest was not run; the developer-reported pre-fix result was 2 failed, 448 passed.

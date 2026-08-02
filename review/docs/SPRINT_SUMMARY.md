@@ -1,3 +1,4 @@
-# Sprint 18.4B Summary
+# Sprint 18.4C Summary
+Implemented the persistent Historical Market Lake foundation: typed models/configuration, atomic local partitions, normalized/raw/options storage, manifests, incremental sync, point-in-time enrichment with checkpoints, separate factual outcomes, typed queries, availability, and a developer status service. Existing recommendation formulas and Analyst Dashboard sections were not modified.
 
-Sprint 18.4B adds an additive Historical Replay workspace and Sample Data workspace. It introduces typed mode selection, replay request controls, completed-candle navigation, point-in-time metadata, frozen snapshot display, deterministic sample fixtures, decision-timeline primitives, isolated outcome preview, diagnostics, and session-local statistics. The existing live Analyst Dashboard is retained; execution-state semantics are explicitly out of scope.
+Follow-up hardening accepts mapping, dataclass, enum, timestamp, numpy, and public-attribute results while excluding runtime collaborators and secret-like fields. Enrichment now returns redacted failure diagnostics. Outcome tests and rules explicitly define direction-neutral MFE over all future session candles after the frozen cutoff.
