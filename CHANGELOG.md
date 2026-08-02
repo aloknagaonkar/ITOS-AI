@@ -152,3 +152,10 @@
 - Added schema/engine manifests, corruption-safe reads, idempotent upserts, secret redaction, and behavioural coverage without changing CE/PE/WAIT logic or dashboard sections.
 - Hardened dashboard-result serialization for typed and attribute-based pipeline results, added redacted enrichment diagnostics, and clarified full-remainder-of-session MFE semantics.
 - Corrected the serialization boundary so typed provider identity persists while dashboard runtime provider/client objects remain excluded.
+
+## Sprint 18.4D — Historical Analytics
+
+- Added a typed Historical Analytics workspace over stored Historical Market Lake intelligence and factual outcomes.
+- Added period/filter controls, independent coverage reporting, aggregate dashboard concepts, per-section drill-down, and filtered CSV/JSON export.
+- Added a collapsed Developer → Market Lake panel wired through explicit existing-service callbacks; analysis never downloads, replays, enriches, or executes the Decision Pipeline.
+- Preserved Live, Historical Replay, Sample Data, and existing CE/PE/WAIT behavior.
