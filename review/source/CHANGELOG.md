@@ -138,3 +138,10 @@
 - Added completed-candle cutoff enforcement, option snapshot selection, history
   isolation, deterministic samples, chunked downloading, and a local candle cache.
 - Preserved existing decision formulas and the default live dashboard path.
+
+## Sprint 18.4B — Historical Replay User Experience
+
+- Added typed LIVE, HISTORICAL_REPLAY, and SAMPLE_DATA workspace selection without live fallback.
+- Added replay controls, actual-candle navigation, metadata diagnostics, isolated session state, frozen snapshots, deterministic sample scenarios, and separately revealed outcome previews.
+- Added immutable replay timeline/outcome contracts and deterministic behavioural specifications.
+- Preserved the existing Analyst Dashboard and CE/PE/WAIT decision contracts unchanged.
