@@ -1,5 +1,6 @@
 # Test Report
-Behavioural tests cover trends, degradation, stability bands, pillar coherence, readiness persistence, eligibility, changes, canonical deduplication, shadow alignment, immutability, and decision preservation.
+
+Behavioural tests cover gates, normalization, scoring, direction, manipulation, missing data, rejection, sorting, deduplication, explanation, immutability, and informational-only behaviour.
 
 **pytest not executed by Codex — local validation required.**
 

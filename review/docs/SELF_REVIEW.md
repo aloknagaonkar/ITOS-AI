@@ -1,2 +1,7 @@
 # Self Review
-Confirmed the engine is deterministic, repository-free, Streamlit-free, immutable, clamped, and conservative on malformed input. Pipeline integration reuses one instance and does not feed validation into SafetyGatePolicy or recommendation construction. Dashboard changes are additive: no existing component was deleted, renamed, moved, hidden, replaced, or collapsed; downloads/exports and primary panels remain present.
+
+- Confirmed the ranking path is informational and does not write to recommendation fields.
+- Confirmed SafetyGatePolicy, AITradeEngine, Trade Planner, legacy strike ranker, persistence schemas, exports, downloads, and session-state keys were not modified.
+- Dashboard work is additive: no existing component was deleted, renamed, relocated, hidden, or collapsed differently.
+- The new panel is below Decision Confidence Validation and above Institutional Metrics v2 Preview.
+- Scores are clamped, deterministic, and explicitly not probability-of-profit estimates.

@@ -1,19 +1,25 @@
 # Roadmap Progress
 
 ## Features added from the missing list
-Confidence Trend, Confidence Stability, Pillar Agreement, Readiness Persistence, Ranking Eligibility, Confidence Change Drivers, New/Resolved Blocker Detection, New/Resolved Penalty Detection, and Shadow Recommendation Comparison.
+Strike Opportunity Score; Top 5 CE Opportunities; Top 5 PE Opportunities; Contract Liquidity, Spread Quality, Greeks Suitability, IV Suitability, OI/Volume, Direction Compatibility and Expiry scores; rejection reasons; Why This Strike explanations.
 
 ## Remaining missing features
-Trade Opportunity Ranking, Top 5 CE Opportunities, Top 5 PE Opportunities, Strike Opportunity Score, Trade Readiness Index, Executive Trade Cockpit, Historical Outcome Validation, and Confidence Calibration from Outcomes.
+Executive Trade Cockpit, Trade Readiness Index, final recommended contract summary, ranked-contract entry/stop/target integration, historical validation, actual-trade calibration, and adaptive weighting.
 
-## Dashboard additions and decision impact
-Added six Market Status validation metrics and the collapsed Decision Confidence Validation panel. Decision impact is none: output remains informational and does not alter live recommendation confidence or CE/PE/WAIT.
+## Dashboard additions
+A collapsed **Trade Opportunity Ranking** panel and additive Market Status metrics. No prior panel was removed or renamed.
 
-## Ranking-readiness progress
-History persistence, coherence, blockers, and stability now gate a typed eligibility result suitable as a Sprint 18 input. Trade Opportunity Ranking itself is next sprint.
+## Decision impact
+None. Ranking is shadow-only and does not alter BUY CE / BUY PE / WAIT, recommendation confidence, safety, or legacy strike selection.
 
-## Top 5 CE/PE and cockpit progress
-Top 5 CE/PE ranking and the Executive Trade Cockpit are not started; no strike scoring was added.
+## Top 5 CE/PE completion progress
+Top 5 CE: complete for v1. Top 5 PE: complete for v1. Both use deterministic tie-breakers and retain the opposite-side view.
+
+## Executive Trade Cockpit progress
+Not started by design.
+
+## Next sprint
+Executive Trade Cockpit.
 
 ## Updated Master Feature Register
-Completed previously: Market Location/Transition, Price & Volume, Positioning, Compression/Energy/Expansion Readiness, Manipulation Intelligence, Institutional Evidence, Decision Confidence Index/Grade/Setup Quality/Ranking Readiness/Contributors/Penalties/Missing Confirmations. Completed this sprint: all validation features listed above. Next: Trade Opportunity Ranking.
+Market Behaviour ✅; Positioning ✅; Compression ✅; Manipulation ✅; Institutional Evidence ✅; Decision Confidence ✅; Confidence Trend/Stability ✅; Ranking Eligibility ✅; Strike Opportunity Ranking ✅; Executive Trade Cockpit ⏳; Trade Readiness Index ⏳; outcome calibration ⏳.

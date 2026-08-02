@@ -51,6 +51,10 @@ from .decision_confidence_validation import (
     ConfidenceHistoryPoint, DecisionConfidenceValidation,
     DecisionConfidenceValidationEngine, DecisionConfidenceValidationSettings,
 )
+from .trade_opportunity_ranking import (
+    OptionOpportunity, TradeOpportunityRanking, TradeOpportunityRankingEngine,
+    TradeOpportunityRankingSettings,
+)
 
 __all__ = [
     "ManipulationIntelligence",
@@ -62,4 +66,6 @@ __all__ = [
     "DecisionConfidenceSettings",
     "ConfidenceHistoryPoint", "DecisionConfidenceValidation",
     "DecisionConfidenceValidationEngine", "DecisionConfidenceValidationSettings",
+    "OptionOpportunity", "TradeOpportunityRanking", "TradeOpportunityRankingEngine",
+    "TradeOpportunityRankingSettings",
 ]
