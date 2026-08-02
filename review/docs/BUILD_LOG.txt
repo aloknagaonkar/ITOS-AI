@@ -1,9 +1,5 @@
-Sprint 15 test-correction validation log
-
-$ python -m py_compile tests/test_manipulation_intelligence.py
-[no output]
-exit status: 0
+$ python -m py_compile app.py itos_platform/__init__.py itos_platform/decision_context.py itos_platform/decision_pipeline.py itos_platform/institutional_evidence.py tests/test_institutional_evidence.py
+[no output; exit status 0]
 
 $ git diff --check
-[no output]
-exit status: 0
+[no output; exit status 0]

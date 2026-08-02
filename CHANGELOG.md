@@ -97,3 +97,8 @@
 - Added immutable, explainable manipulation intelligence covering failed acceptance, liquidity sweeps, stop-hunt evidence, trap risks, wick/rejection, breakout quality, follow-through quality, probability, and severity.
 - Integrated one shared informational result through DecisionContext, DecisionPipeline, PipelineResults, DashboardApplicationResult, Market Status, and a new additive dashboard panel.
 - Added conservative configuration, safe degradation, behavioural coverage, and the Sprint 15 review package. Recommendations, confidence, safety gates, strike selection, and trade planning are unchanged.
+
+## Sprint 16 — Institutional Evidence Engine v1
+- Added an immutable, deterministic institutional evidence aggregation with directional scores, quality, confidence, themes, contradictions, missing confirmations, and narrative.
+- Reused one shadow-only result across DecisionContext, DecisionPipeline, PipelineResults, DashboardApplicationResult, Market Status, and the additive Institutional Evidence panel.
+- Preserved recommendation, confidence, safety-gate, strike-selection, planning, persistence, export, and execution behaviour.

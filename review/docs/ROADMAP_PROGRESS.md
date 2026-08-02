@@ -1,22 +1,15 @@
 # Roadmap Progress
-
 ## Features added from the missing list
-Liquidity Sweep, Stop Hunt, False Breakout, False Breakdown, Bull Trap, Bear Trap, Breakout Quality, Follow-through Quality, Manipulation Probability and Trap Severity.
-
+Institutional Bias; Bullish, Bearish and Neutral Evidence Scores; Evidence Quality; Dominant Theme; Contradictions; Missing Evidence; Institutional Narrative.
 ## Remaining missing features
-Institutional Evidence, Decision Confidence Index, Trade Opportunity Ranking, Top 5 CE opportunities, Top 5 PE opportunities, Trade Readiness Index, Executive Trade Cockpit, Market Narrative, and Historical Validation and Learning.
-
+Decision Confidence Index; Trade Opportunity Ranking; Top 5 CE; Top 5 PE; Trade Readiness Index; Executive Trade Cockpit; Trade Planner refinements; Historical Validation and Learning.
 ## Dashboard additions
-An additive manipulation summary in Market Status and a collapsed-by-default Manipulation Intelligence panel below Compression Intelligence and above Institutional Metrics v2 Preview.
-
+An additive collapsed Institutional Evidence panel below Manipulation Intelligence and above Institutional Metrics v2 Preview, plus an institutional summary row in Market Status.
 ## Decision impact
-None. Sprint 15 is informational only and does not alter CE/PE/WAIT, existing confidence or safety logic.
-
-## Ranking and cockpit progress
-The typed result supplies future ranking/cockpit diagnostics, but Top 5 CE/PE ranking and Executive Trade Cockpit remain unimplemented.
-
+None. Sprint 16 is informational/shadow-only and does not feed recommendation, existing confidence, safety gates, AI opportunity, strikes or planning.
+## Forward progress
+The consolidated evidence contract is the explainable input boundary for a future Decision Confidence Index. Top 5 CE/PE and Executive Trade Cockpit remain unimplemented and unchanged.
 ## Next sprint
-Institutional Evidence.
-
+Decision Confidence Index.
 ## Updated Master Feature Register
-Completed previously: Market Location/Transition; Price and Volume Direction/Strength/Confirmation; Effort versus Result; Accumulation, Distribution, Expansion, Absorption, Exhaustion; Futures and Options Positioning; Compression, Energy Stored and Expansion Readiness. Completed now: all ten Sprint 15 items listed above. Remaining items are listed in the remaining-features section.
+All previously completed market-location, transition, price-volume, positioning, compression and manipulation features remain complete. Sprint 16's nine features above are complete; all remaining items above are planned.

@@ -959,6 +959,19 @@ with tab_live:
         st.caption(f"Meaning: ({status_manipulation.meaning})")
     else:
         st.caption("Manipulation: Not available yet")
+    status_evidence = institutional_evidence if institutional_evidence is not None else None
+    if status_evidence and status_evidence.bias != "UNAVAILABLE":
+        evidence_status = [
+            ("Institutional Bias", status_evidence.display_label),
+            ("Institutional Confidence", f"{status_evidence.confidence:.0f}%"),
+            ("Dominant Theme", status_evidence.dominant_theme.replace("_", " ").title()),
+            ("Evidence Quality", f"{status_evidence.evidence_quality:.0f}%"),
+            ("Primary Contradiction", status_evidence.contradictions[0] if status_evidence.contradictions else "None"),
+        ]
+        for column, (label, value) in zip(st.columns(5), evidence_status):
+            column.metric(label, value)
+    else:
+        st.caption("Institutional Evidence: Not available yet")
 
     with st.expander("Market Location & Transition", expanded=False):
         if market_location is None:
@@ -1112,6 +1125,37 @@ with tab_live:
             ):
                 st.markdown(f"**{title}**")
                 for item in items or (fallback,): st.write(f"• {item}")
+
+    with st.expander("Institutional Evidence", expanded=False):
+        if institutional_evidence is None or institutional_evidence.bias == "UNAVAILABLE":
+            st.info("Institutional evidence is unavailable.")
+        else:
+            st.markdown("### Summary")
+            summary = {
+                "Institutional Bias": institutional_evidence.display_label,
+                "Meaning": institutional_evidence.meaning,
+                "Confidence": f"{institutional_evidence.confidence:.0f}%",
+                "Evidence Quality": f"{institutional_evidence.evidence_quality:.0f}%",
+                "Dominant Theme": institutional_evidence.dominant_theme.replace("_", " ").title(),
+                "Secondary Theme": institutional_evidence.secondary_theme.replace("_", " ").title() if institutional_evidence.secondary_theme else "None",
+                "Bullish Score": institutional_evidence.bullish_score,
+                "Bearish Score": institutional_evidence.bearish_score,
+                "Neutral Score": institutional_evidence.neutral_score,
+            }
+            st.table(pd.DataFrame(summary.items(), columns=["Measure", "Value"]))
+            st.markdown("### Supporting evidence")
+            for title, evidence_items in (("Bullish", institutional_evidence.bullish_evidence), ("Bearish", institutional_evidence.bearish_evidence), ("Neutral", institutional_evidence.neutral_evidence)):
+                st.markdown(f"**{title} evidence**")
+                if evidence_items:
+                    st.table(pd.DataFrame([{"Label": item.label, "Source": item.source, "Strength": item.strength, "Reliability": item.reliability, "Explanation": item.explanation} for item in evidence_items]))
+                else:
+                    st.write("• None identified.")
+            st.markdown("### Risk and completeness")
+            for title, entries in (("Contradictions", institutional_evidence.contradictions), ("Missing Evidence", institutional_evidence.missing_evidence), ("Quality Flags", institutional_evidence.quality_flags)):
+                st.markdown(f"**{title}**")
+                for entry in entries or ("None identified.",): st.write(f"• {entry}")
+            st.markdown("### Narrative")
+            st.write(institutional_evidence.narrative)
 
     with st.expander("Institutional Metrics v2 Preview", expanded=False):
         if institutional_metrics is None:

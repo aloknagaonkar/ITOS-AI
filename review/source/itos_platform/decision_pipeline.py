@@ -34,6 +34,7 @@ from .volume_structure import VolumeStructure, VolumeStructureEngine
 from .positioning_intelligence import PositioningIntelligence, PositioningIntelligenceEngine
 from .compression_intelligence import CompressionIntelligence
 from .manipulation_intelligence import ManipulationIntelligence, ManipulationIntelligenceEngine
+from .institutional_evidence import InstitutionalEvidence, InstitutionalEvidenceEngine
 from .safety_gate_policy import SafetyDecision, SafetyGatePolicy
 
 
@@ -69,6 +70,7 @@ class PipelineResults:
     decision_context: DecisionContext
     safety_decision: SafetyDecision
     institutional_metrics: InstitutionalMetrics | None = None
+    institutional_evidence: InstitutionalEvidence | None = None
 
     @property
     def ice_result(self) -> Any:
@@ -105,7 +107,8 @@ class DecisionPipeline:
         "FalseBreakoutEngine", "ManipulationIntelligenceEngine", "InstitutionalConfirmationEngine",
         "InstitutionalDecisionMatrixEngine", "InstitutionalFlowEngine",
         "InstitutionalConfidenceEngine", "SignalValidationEngine", "EarlyWarningEngine",
-        "MarketRegimeEngine", "SmartMoneyIndexEngine", "MarketEnergyEngine", "DataHealthEngine",
+        "MarketRegimeEngine", "InstitutionalEvidenceEngine", "SmartMoneyIndexEngine",
+        "MarketEnergyEngine", "DataHealthEngine",
     )
 
     def __init__(
@@ -114,6 +117,7 @@ class DecisionPipeline:
         institutional_metrics_engine: InstitutionalMetricsEngine | None = None,
         positioning_intelligence_engine: PositioningIntelligenceEngine | None = None,
         manipulation_intelligence_engine: ManipulationIntelligenceEngine | None = None,
+        institutional_evidence_engine: InstitutionalEvidenceEngine | None = None,
     ) -> None:
         self.safety_policy = safety_policy or SafetyGatePolicy()
         self.institutional_metrics_engine = (
@@ -121,6 +125,7 @@ class DecisionPipeline:
         )
         self.positioning_intelligence_engine = positioning_intelligence_engine or PositioningIntelligenceEngine()
         self.manipulation_intelligence_engine = manipulation_intelligence_engine or ManipulationIntelligenceEngine()
+        self.institutional_evidence_engine = institutional_evidence_engine or InstitutionalEvidenceEngine()
 
     def execute(self, context: DecisionContext) -> PipelineResults:
         recommendation = context.recommendation
@@ -237,6 +242,11 @@ class DecisionPipeline:
         recommendation.update({"institutional_flow_v77": flow_result.metadata, "institutional_confidence_v77": institutional_confidence_result.metadata, "signal_validation_v77": validation_result.metadata, "early_warning_v77": early_warning_result.metadata})
         regime_result = MarketRegimeEngine().analyze(context)
         context = self._with_result(context, "market_regime", regime_result)
+        institutional_evidence = self.institutional_evidence_engine.analyze(context)
+        context = self._with_result(
+            context, "institutional_evidence", institutional_evidence,
+            institutional_evidence=institutional_evidence,
+        )
         smart_money_result = SmartMoneyIndexEngine().analyze(context)
         context = self._with_result(context, "smart_money_index", smart_money_result)
         energy_result = MarketEnergyEngine().analyze(context)
@@ -247,7 +257,7 @@ class DecisionPipeline:
         data_health_result = DataHealthEngine().analyze(snapshot)
         context = self._with_result(context, "data_health", data_health_result)
         safety_decision = self.safety_policy.enforce(recommendation, data_health_result=data_health_result)
-        return PipelineResults(cycle_result, stability_result, transition_result, pattern_result, readiness_result, radar_result, story_result, candle_dna_result, smart_candle_result, structure_result, market_location, volume_structure, positioning_intelligence, compression_intelligence, footprint_result, false_breakout_result, manipulation_intelligence, confirmation_result, decision_matrix_result, flow_result, institutional_confidence_result, validation_result, early_warning_result, regime_result, smart_money_result, energy_result, data_health_result, context, safety_decision, institutional_metrics)
+        return PipelineResults(cycle_result, stability_result, transition_result, pattern_result, readiness_result, radar_result, story_result, candle_dna_result, smart_candle_result, structure_result, market_location, volume_structure, positioning_intelligence, compression_intelligence, footprint_result, false_breakout_result, manipulation_intelligence, confirmation_result, decision_matrix_result, flow_result, institutional_confidence_result, validation_result, early_warning_result, regime_result, smart_money_result, energy_result, data_health_result, context, safety_decision, institutional_metrics, institutional_evidence)
 
     @staticmethod
     def _with_result(

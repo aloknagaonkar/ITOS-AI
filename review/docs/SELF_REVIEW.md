@@ -1,15 +1,14 @@
 # Self Review
-
-- **Architecture assessment:** repository-free typed engine placed after required evidence; same frozen instance propagated.
-- **Trading-logic assessment:** no recommendation or existing engine output is consumed as a writable decision input.
-- **Manipulation-model assessment:** multiple independent characteristics are required for strong states; a wick alone is weak.
-- **Look-ahead-bias assessment:** only rows already present in the snapshot are evaluated; no future candle is requested.
-- **False-breakout compatibility assessment:** legacy evidence is contextual agreement/contradiction and its formulas are untouched.
-- **Behaviour-preservation assessment:** CE/PE/WAIT, confidence, safety, strike and planning paths are unchanged.
-- **Dashboard-preservation assessment:** additions only; no existing component was deleted, renamed, relocated or collapsed, and downloads/exports remain.
-- **Backward-compatibility assessment:** typed context and explicit legacy mapping paths are separate; dashboard exposure uses the existing mapping.
-- **Safe-degradation assessment:** missing/malformed candles, levels and optional contexts return unavailable or capped-confidence results with flags.
-- **Test gaps:** full suite and interactive Streamlit rendering were not run by instruction.
-- **Temporary technical debt:** the branch lacks the full Sprint 14 Compression engine; an immutable compatibility contract is used.
-- **Known assumptions:** supplied support/resistance are validated; all candle rows are completed at analysis time.
-- **Confidence level:** 8/10 pending local pytest and UI validation.
+- **Architecture assessment:** clean repository-free, UI-free aggregation boundary; one shared immutable output.
+- **Evidence-model assessment:** frozen model fully carries conclusion, scores, quality and explanations.
+- **Evidence-deduplication assessment:** unique codes are dictionary keys; positioning owns classified OI so raw OI is not counted again.
+- **Contradiction-handling assessment:** opposing sides and weak follow-through remain visible and penalize confidence.
+- **Narrative-quality assessment:** deterministic, cautious, concise template covers every required context group.
+- **Behaviour-preservation assessment:** engine output is never passed to recommendation or safety engines.
+- **Dashboard-preservation assessment:** additive status row/panel only; existing sections, labels, order, exports and downloads remain.
+- **Backward-compatibility assessment:** existing compatibility mapping automatically includes the new optional result.
+- **Safe-degradation assessment:** absent/malformed optional data produces missing evidence, flags and conservative confidence.
+- **Test gaps:** pytest and live Streamlit rendering were not run by instruction; exhaustive numeric calibration needs historical validation.
+- **Temporary technical debt:** flow/regime/compression need richer typed contracts.
+- **Known assumptions:** upstream score fields use 0–100 and upstream labels retain documented canonical values.
+- **Confidence level:** 8/10.
