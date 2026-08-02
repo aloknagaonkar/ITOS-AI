@@ -1,3 +1,6 @@
 # Roadmap Progress
-
-Sprint 18.3A restores the missing calculated Compression baseline. The approved ITOS Master Roadmap v3.0 remains unchanged. The next sprint remains Sprint 18.4 Historical Replay Engine.
+- Sprint 18.4A adds the Historical Replay backend foundation.
+- Sprint 18.4B remains next for replay UX.
+- Sprint 18.5 remains the Execution Decision Engine.
+- Sprint 18.6 remains Explainable Navigation.
+- Approved Roadmap v3.0 is unchanged.

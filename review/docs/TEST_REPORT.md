@@ -1,5 +1,6 @@
 # Test Report
+pytest not executed by Codex — local validation required.
 
-Codex validation is intentionally limited by sprint instruction to Python compilation and `git diff --check`. Pytest was **not run**; local validation with `python -m pytest -q` is required. Streamlit UI validation was **not run**; local validation with `streamlit run app.py` is required.
-
-Deterministic compression tests cover missing/malformed/insufficient candles, zero ranges, score bounds, optional volume/OI degradation, compression/release behavior, typed/legacy parity, input immutability, DecisionContext reconciliation, and recommendation isolation. Full pipeline compatibility remains subject to local pytest validation.
+Codex validation is restricted to `python -m py_compile <all modified Python files>`
+and `git diff --check`. Local validation must run `python -m pytest -q` and
+`streamlit run app.py`.

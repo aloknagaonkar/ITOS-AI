@@ -19,6 +19,9 @@ from itos_platform.decision_context import (
     DecisionContext, MarketSnapshot, recommendation_is_available,
 )
 from itos_platform.decision_pipeline import DecisionPipeline
+from itos_platform.replay import (
+    DataMode, MarketDataProvider, ReplayRequest, filter_history_at_cutoff,
+)
 
 
 class DashboardDataUnavailable(RuntimeError):
@@ -61,18 +64,37 @@ class DashboardApplicationService:
         warning: Callable[[str], None] | None = None,
         clock: Callable[[], str] | None = None,
         pipeline_factory: Callable[[], DecisionPipeline] = DecisionPipeline,
+        provider: MarketDataProvider | None = None,
     ) -> None:
         self.client_factory = client_factory
         self.store_factory = store_factory
         self.warning = warning or (lambda _message: None)
         self.clock = clock or (lambda: time.strftime("%H:%M:%S"))
         self.pipeline_factory = pipeline_factory
+        self.provider = provider
 
     def execute(
         self, *, token: str, instrument_key: str, underlying: str, expiry: str,
         timeframe: int, strikes: int, save_snapshots: bool, history_hours: int,
         should_load: bool, session_state: MutableMapping[str, Any],
+        data_mode: DataMode = DataMode.LIVE,
+        replay_request: ReplayRequest | None = None,
     ) -> DashboardApplicationResult:
+        provider_snapshot = None
+        if data_mode is not DataMode.LIVE:
+            if self.provider is None or self.provider.mode is not data_mode:
+                raise DashboardDataUnavailable(
+                    f"No provider configured for {data_mode.value}; live fallback is prohibited"
+                )
+            provider_snapshot = self.provider.build_market_snapshot(request=replay_request)
+            session_state["option_result"] = provider_snapshot.option_result
+            session_state["intelligence"] = provider_snapshot.intelligence
+            session_state["historical_pattern_candles"] = provider_snapshot.historical_candles
+            session_state["underlying"] = provider_snapshot.selected_instrument
+            session_state["expiry"] = provider_snapshot.expiry
+            session_state["timeframe"] = provider_snapshot.timeframe
+            session_state["last_refresh"] = str(provider_snapshot.analysis_timestamp or "")
+            should_load = False
         if should_load:
             client = self.client_factory(token)
             raw_chain = client.get_option_chain(instrument_key, expiry)
@@ -162,7 +184,7 @@ class DashboardApplicationService:
                 self.warning(f"Historical flow could not be included in the current recommendation: {exc}")
 
         recommendation = build_recommendation(option_result, intelligence, institutional)
-        market_snapshot = MarketSnapshot(
+        market_snapshot = provider_snapshot or MarketSnapshot(
             option_result=option_result,
             intelligence=intelligence,
             historical_candles=session_state.get(
@@ -183,6 +205,12 @@ class DashboardApplicationService:
         prior_phase_history = engine_store.get_phase_history(
             market_snapshot.selected_instrument, market_snapshot.expiry, hours=history_hours
         )
+        if provider_snapshot is not None:
+            cutoff = market_snapshot.data_cutoff_timestamp
+            prior_confidence_history = filter_history_at_cutoff(prior_confidence_history, cutoff)
+            prior_phase_history = filter_history_at_cutoff(prior_phase_history, cutoff)
+            decision_history = filter_history_at_cutoff(decision_history, cutoff)
+            decision_strike_history = filter_history_at_cutoff(decision_strike_history, cutoff)
         decision_context = DecisionContext(
             market_snapshot=market_snapshot,
             recommendation=recommendation,
@@ -222,6 +250,9 @@ class DashboardApplicationService:
         stability_history = engine_store.get_stability_history(
             market_snapshot.selected_instrument, market_snapshot.expiry, hours=history_hours
         )
+        if provider_snapshot is not None:
+            phase_history = filter_history_at_cutoff(phase_history, market_snapshot.data_cutoff_timestamp)
+            stability_history = filter_history_at_cutoff(stability_history, market_snapshot.data_cutoff_timestamp)
         confidence_history = pd.DataFrame()
         try:
             confidence_store = self.store_factory()
@@ -233,6 +264,8 @@ class DashboardApplicationService:
                 market_snapshot.selected_instrument, market_snapshot.expiry,
                 hours=history_hours,
             )
+            if provider_snapshot is not None:
+                confidence_history = filter_history_at_cutoff(confidence_history, market_snapshot.data_cutoff_timestamp)
         except Exception as exc:
             self.warning(f"Confidence history could not be updated: {exc}")
         trade_history = pd.DataFrame()
@@ -247,6 +280,8 @@ class DashboardApplicationService:
             trade_history = trade_store.get_trade_history(
                 market_snapshot.selected_instrument, market_snapshot.expiry
             )
+            if provider_snapshot is not None:
+                trade_history = filter_history_at_cutoff(trade_history, market_snapshot.data_cutoff_timestamp)
             trade_stats = trade_store.trade_statistics(
                 market_snapshot.selected_instrument, market_snapshot.expiry
             )

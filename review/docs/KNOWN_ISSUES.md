@@ -1,6 +1,5 @@
 # Known Issues
-
-- OI build scoring requires typed OI velocity; explicitly marked proxy OI receives a confidence ceiling. Many live snapshots may therefore report `OI_UNAVAILABLE` until sufficient history exists.
-- Release classification is deliberately conservative and uses only completed-candle follow-through; intrabar release is not inferred.
-- Provider timestamp aliases are normalized, but a feed without timestamps cannot be cutoff-filtered and is analyzed in supplied order.
-- Pytest and interactive Streamlit validation remain developer-local requirements.
+- Exchange holiday detection relies on an empty provider response; no exchange calendar is bundled.
+- Historical option persistence is an interface only until a licensed snapshot source is configured.
+- JSON is used instead of parquet to avoid adding a heavy optional dependency.
+- Full replay UX and outcome evaluation are deferred to Sprint 18.4B.
