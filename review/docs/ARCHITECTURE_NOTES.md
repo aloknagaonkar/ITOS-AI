@@ -1,2 +1,2 @@
-# Architecture Notes
-The read-only trade-review service joins frozen intelligence to factual outcomes by immutable record ID without invoking DecisionPipeline. Central registries own thresholds/triggers/navigation. Option and live capture services are dependency-injected and provider/order independent. UI state is isolated under `historical_trade_review_*`; normal rendering is typed and JSON-free, with raw sanitized records confined to collapsed Advanced Diagnostics.
+# Architecture Notes — Sprint 18.4E
+`market_lake.HistoricalIntelligenceRecord.trade_id` is an additive property. `historical_intelligence_index.py` owns configuration, registries, contracts, builder, SQLite adapter, build service, statistics cache, and relationship graph so analytical engines remain index-unaware. SQLite uses a composite identity/version primary key, secondary filter indexes, transactional bulk writes, parameter binding, and a mutation generation for cache freshness.
