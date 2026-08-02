@@ -165,3 +165,8 @@
 - Added typed instrument/settings, immutable plans/results/progress, bounded chunking, normalization, missing-date storage, checkpoints, finite retry, cancellation, and resume.
 - Added separate raw sync, intelligence enrichment, and factual outcome actions plus Historical Analytics developer controls and scoped cache invalidation.
 - Added deterministic fake-based behavioral/security tests and review documentation; analytical formulas and CE/PE/WAIT are unchanged.
+
+## Sprint 18.4D.2 — Historical Dashboard & Trade Review
+- Added trader-facing coverage, aggregate dashboard, filtered review table, deterministic directional classifications, stored-evidence triggers/reasons, and frozen-record deep dives.
+- Added explicit expired-option partial replay, derived candle chain, failure-isolated live Market Lake capture, and after-market finalization contracts.
+- Confined raw JSON to collapsed Advanced Diagnostics and preserved all trading formulas and roadmap order.

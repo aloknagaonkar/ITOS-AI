@@ -110,6 +110,39 @@ class UpstoxClient:
             )
         return data
 
+    def get_expired_option_expiries(self, instrument_key: str) -> list[str]:
+        """Return officially exposed historical expiries (read-only V2 API)."""
+        response = requests.get(f"{self.BASE_URL_V2}/expired-instruments/expiries",
+            params={"instrument_key": instrument_key}, headers=self._headers(), timeout=self.timeout)
+        self._raise_for_api_error(response)
+        payload = response.json(); data = payload.get("data") if isinstance(payload, dict) else None
+        if not isinstance(data, list): raise UpstoxAPIError("Malformed expired-expiry response.")
+        return sorted({str(item.get("expiry") if isinstance(item, dict) else item) for item in data
+                       if (item.get("expiry") if isinstance(item, dict) else item)})
+
+    def get_expired_option_contracts(self, instrument_key: str, expiry_date: str) -> list[dict[str, Any]]:
+        """Discover expired CE/PE contracts without retaining authorization data."""
+        response = requests.get(f"{self.BASE_URL_V2}/expired-instruments/option/contract",
+            params={"instrument_key": instrument_key, "expiry_date": expiry_date}, headers=self._headers(), timeout=self.timeout)
+        self._raise_for_api_error(response)
+        payload=response.json(); data=payload.get("data") if isinstance(payload,dict) else None
+        if not isinstance(data,list): raise UpstoxAPIError("Malformed expired-contract response.")
+        return [dict(item) for item in data if isinstance(item,dict)]
+
+    def get_expired_historical_candles(self, expired_instrument_key: str, from_date: str,
+                                       to_date: str, *, interval: int = 1) -> pd.DataFrame:
+        """Fetch expired-contract OHLC/volume/OI candles; no chain fields exist."""
+        path=("/expired-instruments/historical-candle/"+self._encode_instrument_key(expired_instrument_key)
+              +f"/{interval}minute/{to_date}/{from_date}")
+        response=requests.get(f"{self.BASE_URL_V2}{path}",headers=self._headers(),timeout=self.timeout)
+        if response.status_code in (401,403,429):
+            self._raise_for_api_error(response)
+        try: payload=response.json()
+        except (ValueError,TypeError): raise UpstoxAPIError("Malformed expired-candle response.") from None
+        data=payload.get("data") if isinstance(payload,dict) else None; candles=data.get("candles") if isinstance(data,dict) else None
+        if not response.ok or not isinstance(candles,list): raise UpstoxAPIError("Expired historical candles unavailable.")
+        return self.candles_to_dataframe(candles)
+
     def get_historical_candles(
         self,
         instrument_key: str,

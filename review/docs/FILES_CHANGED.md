@@ -1,3 +1,15 @@
 # Files Changed
-
-See the committed Git diff. Added `itos_platform/historical_sync.py`, its behavioral test suite, sync rules, and review-source copies. Modified `app.py`, `upstox_client.py`, `ui/historical_analytics_workspace.py`, `CHANGELOG.md`, and requested review documentation. Review source contains only production/test/configuration/change-log files modified for this sprint.
+## Added
+- `itos_platform/historical_trade_review.py`
+- `itos_platform/historical_options.py`
+- `itos_platform/live_market_lake.py`
+- `tests/test_historical_trade_review.py`
+- `tests/test_historical_options_and_live_capture.py`
+- `review/docs/HISTORICAL_TRADE_REVIEW_RULES.md`
+## Modified
+- `ui/historical_analytics_workspace.py`
+- `upstox_client.py`
+- `CHANGELOG.md`
+- Sprint review documentation and source review package.
+## Deleted
+None.

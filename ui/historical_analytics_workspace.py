@@ -19,8 +19,14 @@ from itos_platform.historical_sync import (
     HistoricalAuthenticationError, HistoricalSyncManager,
     HistoricalSyncProgress, invalidate_historical_analytics_cache,
 )
+from itos_platform.historical_trade_review import (
+    NAVIGATION_REGISTRY, TradeReviewFilters, build_coverage_rows, build_trade_reviews,
+    export_csv as export_review_csv, export_json as export_review_json,
+    filter_trade_reviews, trade_table_rows,
+)
 
 PREFIX = "historical_analytics_"
+TRADE_PREFIX = "historical_trade_review_"
 
 
 @dataclass(frozen=True)
@@ -37,7 +43,7 @@ def _option(label: str) -> str | None:
 
 
 def _coverage(result: HistoricalAnalyticsResult) -> None:
-    st.subheader("Data Freshness & Coverage")
+    st.subheader("Historical Data Coverage")
     request = result.request
     st.caption(f"Selected date range: {request.start_date} → {request.end_date}")
     metrics = (("Expected trading sessions", result.expected_session_count), ("Raw sessions", result.raw_session_count),
@@ -48,8 +54,8 @@ def _coverage(result: HistoricalAnalyticsResult) -> None:
         ("Engine version", ", ".join(result.engine_versions)), ("Schema version", ", ".join(result.schema_versions)))
     columns = st.columns(4)
     for index, (label, value) in enumerate(metrics): columns[index % 4].metric(label, value)
-    st.write("Available dates", result.available_dates or "None")
-    st.write("Missing dates", result.missing_dates or "None")
+    st.caption("Available dates: " + (", ".join(map(str, result.available_dates)) or "None"))
+    st.caption("Missing dates: " + (", ".join(map(str, result.missing_dates)) or "None"))
     if result.missing_dates:
         st.warning("Historical data is incomplete for this period.")
         if st.button("Open Developer → Market Lake", key=PREFIX+"open_developer"):
@@ -126,10 +132,8 @@ def render_sync_progress(progress: object) -> None:
     row[1].metric("Stored rows", integer("stored_rows"))
     row[2].metric("Current date", str(values.get("current_date") or "—"))
     row[3].metric("Current chunk", f"{chunk_number}/{chunk_count}" if chunk_count else "—")
-    st.json({
-        "quality_flags": list(values.get("quality_flags") or ()),
-        "explanations": list(values.get("explanations") or ()),
-    })
+    notes = [*(values.get("quality_flags") or ()), *(values.get("explanations") or ())]
+    if notes: st.dataframe(pd.DataFrame({"Status detail": notes}), hide_index=True, use_container_width=True)
 
 
 def _render_sync_result(result: object) -> None:
@@ -137,12 +141,13 @@ def _render_sync_result(result: object) -> None:
     if isinstance(result, pd.DataFrame):
         st.dataframe(result, hide_index=True, use_container_width=True)
     elif is_dataclass(result) and not isinstance(result, type):
-        st.json(asdict(result))
+        st.dataframe(pd.DataFrame(asdict(result).items(), columns=("Result", "Value")), hide_index=True)
     elif isinstance(result, Mapping):
-        st.json(dict(result))
+        st.dataframe(pd.DataFrame(dict(result).items(), columns=("Result", "Value")), hide_index=True)
     else:
         model_dump = getattr(result, "model_dump", None)
-        st.json(model_dump() if callable(model_dump) else {"status": "Unavailable"})
+        values = model_dump() if callable(model_dump) else {"status": "Unavailable"}
+        st.dataframe(pd.DataFrame(values.items(), columns=("Result", "Value")), hide_index=True)
 
 
 def _developer_panel(lake: LocalHistoricalMarketLake, provider: str, request: HistoricalRangeRequest,
@@ -161,7 +166,7 @@ def _developer_panel(lake: LocalHistoricalMarketLake, provider: str, request: Hi
             "Outcome schema version": lake.settings.outcome_schema_version, "Engine version": status.engine_version,
             "Authentication": "Available" if manager and manager.authentication_available else "Unavailable",
             "Completed dates": status.completed_dates, "Failed dates": status.failed_dates}
-        st.json(details)
+        st.dataframe(pd.DataFrame(details.items(), columns=("Property", "Value")), hide_index=True, use_container_width=True)
         st.caption("Recommended pilot: NIFTY, 1 minute, 1 week, 5-minute analysis cadence.")
         st.info("Historical option-chain snapshots are unavailable for this sync. Records are CANDLE_ONLY_REPLAY.")
         rebuild = st.columns(3)
@@ -177,15 +182,12 @@ def _developer_panel(lake: LocalHistoricalMarketLake, provider: str, request: Hi
             except ValueError as error: st.error(str(error))
         plan = st.session_state.get(PREFIX+"sync_plan")
         if plan is not None:
-            st.json({"Expected sessions": len(plan.expected_dates), "Raw sessions complete": len(plan.complete_dates),
-                "Missing raw sessions": len(plan.missing_dates), "Intelligence sessions to build": len(plan.dates_to_enrich),
-                "Outcome sessions to build": len(plan.dates_to_build_outcomes), "Estimated raw requests": plan.estimated_raw_requests,
-                "Estimated analysis points": plan.estimated_analysis_points, "Analysis cadence minutes": cadence})
+            st.dataframe(pd.DataFrame({"Metric": ["Expected sessions","Raw sessions complete","Missing raw sessions","Intelligence sessions to build","Outcome sessions to build","Estimated raw requests","Estimated analysis points","Analysis cadence minutes"], "Value": [len(plan.expected_dates),len(plan.complete_dates),len(plan.missing_dates),len(plan.dates_to_enrich),len(plan.dates_to_build_outcomes),plan.estimated_raw_requests,plan.estimated_analysis_points,cadence]}), hide_index=True, use_container_width=True)
         def raw_action(_request):
             progress_box = st.empty()
             def report(value: HistoricalSyncProgress):
                 st.session_state[PREFIX+"progress"] = value
-                progress_box.json(asdict(value))
+                progress_box.dataframe(pd.DataFrame(asdict(value).items(), columns=("Progress", "Value")), hide_index=True)
             result = manager.sync_missing_raw(_request, progress=report)
             st.session_state[PREFIX+"sync_result"] = result
             invalidate_historical_analytics_cache(st.session_state)
@@ -258,15 +260,92 @@ def render_historical_analytics_workspace(underlyings: Mapping[str, str], *, pro
         st.info("Choose a range and click **Analyze Stored Data**. No data is downloaded automatically.")
         return
     _coverage(result)
+    manifest = lake.get_manifest(provider, instrument, interval)
+    expected = tuple(start + timedelta(days=i) for i in range((end-start).days+1)
+                     if (start + timedelta(days=i)).weekday() < 5)
+    coverage_rows = build_coverage_rows(manifest, expected)
+    st.dataframe(pd.DataFrame([{
+        "Date": row.trading_date, "Underlying Candles": "Yes" if row.underlying_candles else "—",
+        "Option Contracts": "Yes" if row.option_contracts else "—", "Intelligence": "Yes" if row.intelligence else "—",
+        "Outcomes": "Yes" if row.outcomes else "—", "Replay Completeness": row.replay_completeness,
+        "Status": row.status, "Action Required": row.action_required} for row in coverage_rows]),
+        hide_index=True, use_container_width=True)
+    st.caption("Downloads and builds run only after an explicit action in Developer → Market Lake.")
+    action_columns = st.columns(4)
+    for column, label in zip(action_columns, ("Preview Download Plan", "Download Missing Underlying Data", "Download Historical Options", "Refresh Coverage")):
+        if column.button(label, key=TRADE_PREFIX+label.lower().replace(" ","_")):
+            st.session_state[PREFIX+"developer_open"] = True
+            st.info(f"{label} selected. Review the explicit plan/action in Developer → Market Lake; nothing ran automatically.")
     if result.explanations:
         for explanation in result.explanations: st.info(explanation)
+    st.header("Historical Dashboard")
     for title, values in _sections(result):
         with st.container(border=True):
-            st.subheader(title); st.json(values)
+            st.subheader(title)
+            safe = [(str(key).replace("_", " ").title(), "—" if value is None else value)
+                    for key, value in values.items()]
+            columns = st.columns(min(4, max(1, len(safe))))
+            for index, (label, value) in enumerate(safe):
+                if isinstance(value, (str, int, float, bool)): columns[index % len(columns)].metric(label, value)
+                else: columns[index % len(columns)].caption(f"**{label}:** {value or '—'}")
             with st.expander("View Details"):
                 st.dataframe(pd.DataFrame(result.detail_rows), hide_index=True, use_container_width=True)
-    exports = st.columns(2)
-    exports[0].download_button("Export CSV", service.export_csv(result), "historical_analytics.csv", "text/csv",
-        key=PREFIX+"export_csv", use_container_width=True)
-    exports[1].download_button("Export JSON", service.export_json(result), "historical_analytics.json", "application/json",
-        key=PREFIX+"export_json", use_container_width=True)
+
+    st.header("Historical Trade Review")
+    reviews = build_trade_reviews(result.records, result.outcome_records, manifest.option_dates if manifest else ())
+    with st.expander("Trade Review Filters", expanded=True):
+        fcols = st.columns(4)
+        decisions = tuple(fcols[0].multiselect("Decision", ("BUY CE","BUY PE","WAIT"), key=TRADE_PREFIX+"decisions"))
+        classifications = tuple(fcols[1].multiselect("Result Classification", ("FAVOURABLE","UNFAVOURABLE","INCONCLUSIVE","AVOIDED","MISSED_OPPORTUNITY","NOT_EVALUABLE"), key=TRADE_PREFIX+"classifications"))
+        confidence_filter = fcols[2].slider("Confidence Range",0.0,100.0,(0.0,100.0),key=TRADE_PREFIX+"confidence")
+        trigger_status = fcols[3].selectbox("Trigger Checklist Status",("ALL","PASS","PARTIAL","FAIL","UNAVAILABLE"),key=TRADE_PREFIX+"trigger_status")
+        searches=st.columns(2)
+        contract_search=searches[0].text_input("Contract / Strike Search",key=TRADE_PREFIX+"contract_search")
+        reason_search=searches[1].text_input("Reason Search",key=TRADE_PREFIX+"reason_search")
+    filtered=filter_trade_reviews(reviews,TradeReviewFilters(start,end,decisions,classifications,confidence_filter[0],confidence_filter[1],None if trigger_status=="ALL" else trigger_status,contract_search=contract_search,reason_search=reason_search))
+    counts={name:sum(r.outcome_classification==name for r in filtered) for name in ("FAVOURABLE","UNFAVOURABLE","INCONCLUSIVE","AVOIDED","MISSED_OPPORTUNITY","NOT_EVALUABLE")}
+    cards=st.columns(4)
+    summary=("Total Setups",len(filtered)),("Favourable",counts["FAVOURABLE"]),("Unfavourable",counts["UNFAVOURABLE"]),("Inconclusive",counts["INCONCLUSIVE"]),("Avoided",counts["AVOIDED"]),("Missed Opportunity",counts["MISSED_OPPORTUNITY"]),("Not Evaluable",counts["NOT_EVALUABLE"]),("Average Confidence",round(sum(r.decision_confidence or 0 for r in filtered)/len([r for r in filtered if r.decision_confidence is not None]),1) if any(r.decision_confidence is not None for r in filtered) else "—")
+    for i,(label,value) in enumerate(summary): cards[i%4].metric(label,value)
+    table=pd.DataFrame(trade_table_rows(filtered))
+    if table.empty: st.info("No stored historical setups match the selected filters.")
+    else:
+        edited=st.data_editor(table,hide_index=True,use_container_width=True,disabled=[c for c in table.columns if c!="View Details"],key=TRADE_PREFIX+"table")
+        selected=edited.loc[edited["View Details"]==True,"Record ID"].tolist()
+        if selected: st.session_state[TRADE_PREFIX+"selected_record_id"]=selected[-1]
+    exports=st.columns(2)
+    exports[0].download_button("Export Filtered CSV",export_review_csv(filtered),"historical_trade_review.csv","text/csv",key=TRADE_PREFIX+"export_csv",use_container_width=True)
+    exports[1].download_button("Export Filtered JSON",export_review_json(filtered),"historical_trade_review.json","application/json",key=TRADE_PREFIX+"export_json",use_container_width=True)
+
+    selected_id=st.session_state.get(TRADE_PREFIX+"selected_record_id")
+    selected=next((item for item in reviews if item.record_id==selected_id),None)
+    st.header("Selected Trade Deep Dive")
+    if selected is None: st.info("Select View Details in the Historical Trade Review table.")
+    else:
+        if st.button("Back to Historical Trade Table",key=TRADE_PREFIX+"back_to_table"):
+            st.session_state[TRADE_PREFIX+"selected_record_id"]=None
+        st.subheader(f"Frozen {selected.recommendation} decision — {selected.analysis_timestamp}")
+        st.caption(selected.outcome_reason+" This is a historical directional evaluation, not a real trade result.")
+        st.markdown("**Why it was considered**")
+        for evidence in [e for t in selected.trigger_results for e in t.evidence if t.status=="PASS"]: st.markdown(f"- {e}")
+        st.markdown("**Why it worked or failed**")
+        st.markdown(f"- {selected.primary_success_reason or selected.primary_failure_reason or selected.outcome_reason}")
+        for trigger in selected.trigger_results:
+            with st.expander(f"{trigger.display_name} — {trigger.status}",expanded=st.session_state.get(TRADE_PREFIX+"active_analysis_target")==trigger.analysis_target):
+                st.caption(f"Impact: {trigger.impact}")
+                for evidence in trigger.evidence: st.markdown(f"- {evidence}")
+                if trigger.missing_requirement: st.warning("Missing requirement: "+trigger.missing_requirement)
+                if trigger.fix_required: st.info("Fix required: "+trigger.fix_required)
+                st.caption("Stable analysis target: "+trigger.analysis_target)
+                if trigger.status != "PASS" and st.button("View Analysis",key=TRADE_PREFIX+"target_"+trigger.trigger_id):
+                    st.session_state[TRADE_PREFIX+"active_analysis_target"]=trigger.analysis_target
+
+    st.header("Historical Option Data")
+    st.info("Derived historical chains align expired-contract candles. They are not complete historical exchange option-chain snapshots.")
+    option_days=set(manifest.option_dates if manifest else ())
+    st.dataframe(pd.DataFrame([{"Date":d,"Historical option contracts discovered":"Stored" if d in option_days else "—","Bid/Ask availability":"Historical bid/ask unavailable","IV availability":"Historical IV unavailable","Greeks availability":"Historical Greeks unavailable","Derived Chain availability":"PARTIAL_OPTION_REPLAY" if d in option_days else "UNAVAILABLE"} for d in expected]),hide_index=True,use_container_width=True)
+
+    with st.expander("Advanced Diagnostics — Developer Only",expanded=False):
+        st.caption("Raw Stored Record → JSON")
+        if selected is not None: st.json(asdict(selected))
+        else: st.info("Select a record to inspect its sanitized frozen payload.")
