@@ -69,3 +69,6 @@ __all__ = [
     "OptionOpportunity", "TradeOpportunityRanking", "TradeOpportunityRankingEngine",
     "TradeOpportunityRankingSettings",
 ]
+from .replay import DataMode, ReplayMetadata, ReplayRequest
+
+__all__ = ["DataMode", "ReplayMetadata", "ReplayRequest"]

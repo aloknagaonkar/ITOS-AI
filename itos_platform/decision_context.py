@@ -45,6 +45,11 @@ class MarketSnapshot:
     expiry: str = ""
     timeframe: int | str | None = None
     data_quality: Mapping[str, Any] = field(default_factory=dict)
+    # Additive point-in-time provenance.  Kept last to preserve positional callers.
+    data_mode: Any = None
+    analysis_timestamp: Any = None
+    data_cutoff_timestamp: Any = None
+    replay_metadata: Any = None
 
     @classmethod
     def from_legacy(cls, market_data: Mapping[str, Any]) -> "MarketSnapshot":
