@@ -945,6 +945,20 @@ with tab_live:
     ]
     for column, (label, value) in zip(st.columns(10), status_values):
         column.metric(label, str(value).replace("_", " ").title())
+    status_manipulation = manipulation_intelligence if manipulation_intelligence is not None else None
+    if status_manipulation and status_manipulation.state != "UNAVAILABLE":
+        manipulation_status = [
+            ("Manipulation Risk", status_manipulation.risk_label),
+            ("Primary State", status_manipulation.display_label),
+            ("Bull-Trap Risk", f"{status_manipulation.bull_trap_risk:.0f}%"),
+            ("Bear-Trap Risk", f"{status_manipulation.bear_trap_risk:.0f}%"),
+            ("Breakout Quality", f"{status_manipulation.breakout_quality:.0f}%"),
+        ]
+        for column, (label, value) in zip(st.columns(5), manipulation_status):
+            column.metric(label, value)
+        st.caption(f"Meaning: ({status_manipulation.meaning})")
+    else:
+        st.caption("Manipulation: Not available yet")
 
     with st.expander("Market Location & Transition", expanded=False):
         if market_location is None:
@@ -1039,6 +1053,65 @@ with tab_live:
             st.write("**Quality Flags:** " + (", ".join(positioning_intelligence.quality_flags) or "None"))
             for explanation in positioning_intelligence.explanations:
                 st.write(f"• {explanation}")
+
+    with st.expander("Compression Intelligence", expanded=False):
+        if compression_intelligence is None or compression_intelligence.state == "UNAVAILABLE":
+            st.info("Compression intelligence is unavailable.")
+        else:
+            compression_columns = st.columns(4)
+            compression_columns[0].metric("State", compression_intelligence.state.replace("_", " ").title())
+            compression_columns[1].metric("Energy Stored", f"{compression_intelligence.energy_stored:.0f}%")
+            compression_columns[2].metric("Expansion Readiness", f"{compression_intelligence.expansion_readiness:.0f}%")
+            compression_columns[3].metric("Confidence", f"{compression_intelligence.confidence:.0f}%")
+            for explanation in compression_intelligence.explanations:
+                st.write(f"• {explanation}")
+
+    with st.expander("Manipulation Intelligence", expanded=False):
+        if manipulation_intelligence is None or manipulation_intelligence.state == "UNAVAILABLE":
+            st.info("Manipulation intelligence is unavailable.")
+        else:
+            st.markdown("### Summary")
+            st.write(f"**State:** {manipulation_intelligence.display_label}")
+            st.write(f"**Meaning:** ({manipulation_intelligence.meaning})")
+            st.write(f"**Market Impact:** {manipulation_intelligence.market_impact}")
+            summary_values = {
+                "Manipulation Probability": f"{manipulation_intelligence.manipulation_probability:.0f}%",
+                "Trap Severity": f"{manipulation_intelligence.trap_severity:.0f}%",
+                "Direction": manipulation_intelligence.direction.replace("_", " ").title(),
+                "Confidence": f"{manipulation_intelligence.confidence:.0f}%",
+            }
+            st.table(pd.DataFrame(summary_values.items(), columns=["Measure", "Value"]))
+            st.markdown("### Trap diagnostics")
+            traps = {
+                "Bull-Trap Risk": f"{manipulation_intelligence.bull_trap_risk:.0f}%",
+                "Bear-Trap Risk": f"{manipulation_intelligence.bear_trap_risk:.0f}%",
+                "Stop-Hunt Probability": f"{manipulation_intelligence.stop_hunt_probability:.0f}%",
+                "Liquidity Sweep Detected": manipulation_intelligence.liquidity_sweep_detected,
+                "Liquidity Sweep Side": manipulation_intelligence.liquidity_sweep_side,
+                "False Breakout Detected": manipulation_intelligence.false_breakout_detected,
+                "False Breakdown Detected": manipulation_intelligence.false_breakdown_detected,
+            }
+            st.table(pd.DataFrame(traps.items(), columns=["Diagnostic", "Value"]))
+            st.markdown("### Quality diagnostics")
+            quality = {
+                "Breakout Quality": manipulation_intelligence.breakout_quality,
+                "Follow-through Quality": manipulation_intelligence.follow_through_quality,
+                "Rejection Score": manipulation_intelligence.rejection_score,
+                "Wick Score": manipulation_intelligence.wick_score,
+                "Return Inside Range": manipulation_intelligence.return_inside_range,
+                "Range Re-entry Speed": manipulation_intelligence.range_reentry_speed if manipulation_intelligence.range_reentry_speed is not None else "Unavailable",
+                "Confirmation Candles": manipulation_intelligence.confirmation_candles,
+            }
+            st.table(pd.DataFrame(quality.items(), columns=["Diagnostic", "Value"]))
+            st.markdown("### Reasoning")
+            for title, items, fallback in (
+                ("Evidence used", manipulation_intelligence.evidence, "No confirming evidence."),
+                ("Contradictions", manipulation_intelligence.contradictions, "None identified."),
+                ("Quality Flags", manipulation_intelligence.quality_flags, "None."),
+                ("Explanations", manipulation_intelligence.explanations, "No explanation available."),
+            ):
+                st.markdown(f"**{title}**")
+                for item in items or (fallback,): st.write(f"• {item}")
 
     with st.expander("Institutional Metrics v2 Preview", expanded=False):
         if institutional_metrics is None:
