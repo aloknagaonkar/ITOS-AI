@@ -1,8 +1,7 @@
 # Roadmap Progress
 
-- Historical Replay complete.
-- Sprint 18.4C complete: Historical Market Lake.
-- Sprint 18.4D implemented: Historical Analytics.
-- Sprint 18.4E Similarity and Pattern Discovery next.
-- The Execution Decision Engine follows historical intelligence.
-- Explainable Navigation and the Executive Cockpit remain planned.
+- Sprint 18.4D Historical Analytics: **complete**.
+- Sprint 18.4D.1 Upstox Historical Sync Manager: **implemented**.
+- Next: **18.4E Similarity & Pattern Discovery**.
+- The Execution Decision Engine remains after historical intelligence.
+- Explainable Navigation and Executive Cockpit remain planned.
