@@ -1,5 +1,15 @@
 # Files Changed
-Sprint 18.4A hardening modifies the replay cache loader and focused replay/service
-tests, plus the seven requested review documents. The source review package mirrors
-only modified Python source and test files at their repository-relative paths;
-`review/docs` is intentionally excluded.
+
+## Added
+- `itos_platform/replay_ux.py`
+- `ui/replay_workspace.py`
+- `tests/test_historical_replay_ux.py`
+- `review/docs/HISTORICAL_REPLAY_UX_RULES.md`
+
+## Modified
+- `app.py`
+- `CHANGELOG.md`
+- Sprint review documents under `review/docs/`
+
+## Deleted
+- None.

@@ -1,8 +1,6 @@
-Sprint 18.4A hardening build
-Developer baseline before hardening: 404 passed in 5.57s
-Redundant decision-history query: removed/verified single call
-Behavioral replay safety tests: added
-python -m py_compile (all modified Python files): PASS
-git diff --check: PASS
-pytest: NOT RUN — LOCAL VALIDATION REQUIRED
-UI validation: NOT RUN — LOCAL VALIDATION REQUIRED
+Sprint 18.4B build
+- Created feature/historical-replay-ux.
+- Added replay UX domain/state/navigation/outcome primitives.
+- Added additive Streamlit replay presentation adapter and app routing.
+- Added deterministic behavioural specifications.
+- pytest intentionally NOT RUN; local validation required.
