@@ -37,6 +37,12 @@ class DashboardApplicationResult:
 
         return self.values.get("trade_opportunity_ranking")
 
+    @property
+    def compression_intelligence(self) -> Any:
+        """Expose the pipeline's single calculated compression instance."""
+
+        return self.values.get("compression_intelligence")
+
     def __getattr__(self, name: str) -> Any:
         try:
             return self.values[name]

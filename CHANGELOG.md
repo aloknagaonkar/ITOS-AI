@@ -124,3 +124,10 @@
 - Added deterministic behavioural coverage and a Sprint 18 review package.
 - The live CE/PE/WAIT recommendation, confidence, SafetyGatePolicy, legacy strike
   ranking, Trade Planner and AI Trade Opportunity remain unchanged.
+# Sprint 18.3A — Compression Intelligence Modernization
+
+- Restored calculated, immutable compression intelligence on the current typed
+  decision architecture, including normalized candle analytics, release states,
+  safe degradation, evidence, contradictions, and quality reporting.
+- Integrated one shared result before manipulation and exposed its diagnostics in
+  the existing dashboard section without changing recommendation formulas.
