@@ -986,6 +986,20 @@ with tab_live:
             column.metric(label, value)
     else:
         st.caption("Decision Confidence: Not available yet")
+    status_validation = decision_confidence_validation if decision_confidence_validation is not None else None
+    if status_validation and status_validation.trend != "UNAVAILABLE":
+        validation_status = [
+            ("Confidence Trend", status_validation.trend.replace("_", " ").title()),
+            ("Confidence Stability", f"{status_validation.stability_score:.0f}%"),
+            ("Pillar Agreement", f"{status_validation.pillar_agreement_score:.0f}%"),
+            ("Ranking Eligibility", status_validation.ranking_eligibility_state.replace("CONDITIONALLY_ELIGIBLE", "CONDITIONAL").replace("_", " ").title()),
+            ("Readiness Persistence", f"{status_validation.readiness_persistence:.0f}%"),
+            ("Primary Change Driver", status_validation.primary_change_driver),
+        ]
+        for column, (label, value) in zip(st.columns(6), validation_status):
+            column.metric(label, value)
+    else:
+        st.caption("Decision Confidence Validation: Not available yet")
 
     with st.expander("Market Location & Transition", expanded=False):
         if market_location is None:
@@ -1206,6 +1220,57 @@ with tab_live:
                     st.write(f"• {entry}")
             st.markdown("**Narrative**")
             st.write(decision_confidence.narrative)
+
+    with st.expander("Decision Confidence Validation", expanded=False):
+        validation = decision_confidence_validation
+        if validation is None or validation.trend == "UNAVAILABLE":
+            st.info("Decision confidence validation is unavailable.")
+        else:
+            st.markdown("### Current state")
+            current_state = {
+                "Current Score": f"{validation.current_score:.1f}/100",
+                "Previous Score": f"{validation.previous_score:.1f}" if validation.previous_score is not None else "Unavailable",
+                "Score Change": f"{validation.score_change:+.1f}" if validation.score_change is not None else "Unavailable",
+                "Trend": validation.trend.replace("_", " ").title(),
+                "Stability State": validation.stability_state.replace("_", " ").title(),
+                "Stability Score": f"{validation.stability_score:.1f}/100",
+                "Pillar Agreement": f"{validation.pillar_agreement_score:.1f}/100",
+                "Ranking Ready Now": "Yes" if validation.ranking_ready_now else "No",
+                "Readiness Persistence": f"{validation.readiness_persistence:.1f}%",
+                "Ranking Eligibility": validation.ranking_eligibility_state.replace("_", " ").title(),
+                "Validation Confidence": f"{validation.confidence:.1f}%",
+            }
+            st.table(pd.DataFrame(current_state.items(), columns=["Measure", "Value"]))
+            st.markdown("### History summary")
+            history_summary = {
+                "Valid History Points": validation.valid_history_points,
+                "Improving Periods": validation.improving_periods,
+                "Stable Periods": validation.stable_periods,
+                "Weakening Periods": validation.weakening_periods,
+            }
+            st.table(pd.DataFrame(history_summary.items(), columns=["Measure", "Value"]))
+            st.markdown("### Change analysis")
+            change_summary = {
+                "Strongest Improving Pillar": validation.strongest_improving_pillar or "None",
+                "Weakest Deteriorating Pillar": validation.weakest_deteriorating_pillar or "None",
+                "Positive Change Drivers": " • ".join(validation.positive_change_drivers) or "None",
+                "Negative Change Drivers": " • ".join(validation.negative_change_drivers) or "None",
+                "New Penalties": " • ".join(validation.new_penalties) or "None",
+                "Resolved Penalties": " • ".join(validation.resolved_penalties) or "None",
+                "New Blockers": " • ".join(validation.new_blockers) or "None",
+                "Resolved Blockers": " • ".join(validation.resolved_blockers) or "None",
+            }
+            st.table(pd.DataFrame(change_summary.items(), columns=["Measure", "Value"]))
+            st.markdown("### Shadow comparison")
+            st.write(f"**Recommendation Alignment:** {validation.recommendation_alignment.replace('_', ' ').title()}")
+            st.write(validation.shadow_observation)
+            st.markdown("### Reasoning")
+            for title, entries in (("Quality Flags", validation.quality_flags), ("Explanations", validation.explanations)):
+                st.markdown(f"**{title}**")
+                for entry in entries or ("None",):
+                    st.write(f"• {entry}")
+            st.markdown("**Narrative**")
+            st.write(validation.narrative)
 
     with st.expander("Institutional Metrics v2 Preview", expanded=False):
         if institutional_metrics is None:

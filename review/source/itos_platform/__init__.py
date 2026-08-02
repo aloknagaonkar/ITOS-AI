@@ -47,6 +47,10 @@ from .decision_confidence import (
     ConfidencePillar, DecisionConfidence, DecisionConfidenceEngine,
     DecisionConfidenceSettings,
 )
+from .decision_confidence_validation import (
+    ConfidenceHistoryPoint, DecisionConfidenceValidation,
+    DecisionConfidenceValidationEngine, DecisionConfidenceValidationSettings,
+)
 
 __all__ = [
     "ManipulationIntelligence",
@@ -56,4 +60,6 @@ __all__ = [
     "InstitutionalEvidenceSettings",
     "ConfidencePillar", "DecisionConfidence", "DecisionConfidenceEngine",
     "DecisionConfidenceSettings",
+    "ConfidenceHistoryPoint", "DecisionConfidenceValidation",
+    "DecisionConfidenceValidationEngine", "DecisionConfidenceValidationSettings",
 ]
