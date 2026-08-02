@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Callable, MutableMapping
 
 import pandas as pd
@@ -19,6 +19,8 @@ from itos_platform.decision_context import (
     DecisionContext, MarketSnapshot, recommendation_is_available,
 )
 from itos_platform.decision_pipeline import DecisionPipeline
+from itos_platform.live_market_lake import LiveMarketLakeCaptureService
+from itos_platform.market_lake import HistoricalIntelligenceRecord
 from itos_platform.replay import (
     DataMode, MarketDataProvider, ReplayRequest, filter_history_at_cutoff,
 )
@@ -66,6 +68,7 @@ class DashboardApplicationService:
         pipeline_factory: Callable[[], DecisionPipeline] = DecisionPipeline,
         provider: MarketDataProvider | None = None,
         client: Any | None = None,
+        capture_service: LiveMarketLakeCaptureService | None = None,
     ) -> None:
         self.client_factory = client_factory
         self.store_factory = store_factory
@@ -74,6 +77,7 @@ class DashboardApplicationService:
         self.pipeline_factory = pipeline_factory
         self.provider = provider
         self.client = client
+        self.capture_service = capture_service
 
     def execute(
         self, *, token: str, instrument_key: str, underlying: str, expiry: str,
@@ -305,6 +309,34 @@ class DashboardApplicationService:
             "ai_trade_opportunity": ai_trade_opportunity,
         }
         values.update(pipeline_values)
+        # Capture the already-computed frozen result.  This boundary is deliberately
+        # failure isolated and never invokes the decision pipeline a second time.
+        if data_mode is DataMode.LIVE and should_load and self.capture_service is not None:
+            try:
+                candles = market_snapshot.historical_candles
+                latest = candles.iloc[-1].to_dict() if isinstance(candles, pd.DataFrame) and not candles.empty else {}
+                stamp_value = latest.get("timestamp") or datetime.now(timezone.utc)
+                stamp = pd.Timestamp(stamp_value).to_pydatetime()
+                if stamp.tzinfo is None: stamp = stamp.replace(tzinfo=timezone.utc)
+                side = str(recommendation.get("status") or recommendation.get("side") or "WAIT")
+                side = side if side in {"BUY CE", "BUY PE", "WAIT"} else ("BUY CE" if side == "CE" else "BUY PE" if side == "PE" else "WAIT")
+                confidence = recommendation.get("confidence") or recommendation.get("score")
+                frozen = HistoricalIntelligenceRecord(
+                    "upstox", instrument_key, market_snapshot.selected_instrument, timeframe,
+                    stamp.date(), stamp, stamp, stamp, "live-decision-pipeline", "intelligence-v1",
+                    "FULL_REPLAY" if option_result.get("chain") is not None else "PARTIAL_OPTION_REPLAY",
+                    side, confidence, confidence, values={
+                        "recommendation": recommendation, "intelligence": intelligence,
+                        "pipeline": pipeline_values,
+                    }, blockers=tuple(recommendation.get("blockers") or ()),
+                )
+                chain = option_result.get("chain")
+                option_records = tuple(chain.to_dict("records")) if isinstance(chain, pd.DataFrame) else ()
+                self.capture_service.capture(instrument_key=instrument_key, interval=timeframe,
+                    timestamp=stamp, raw_snapshot=latest or {"spot": option_result.get("summary", {}).get("spot")},
+                    intelligence=frozen, option_records=option_records)
+            except Exception:
+                self.warning("Live Market Lake capture failed; the live dashboard result is unchanged.")
         return DashboardApplicationResult(values)
 
     @staticmethod

@@ -30,7 +30,8 @@ class LiveMarketLakeCaptureService:
     def __init__(self, lake: LocalHistoricalMarketLake, *, provider: str="upstox", settings: LiveCaptureSettings=LiveCaptureSettings()):
         self.lake,self.provider,self.settings=lake,provider,settings; self._keys=set(); self.status=LiveCaptureStatus(settings.enabled,settings.cadence_minutes)
     def capture(self, *, instrument_key: str, interval: int, timestamp: datetime, raw_snapshot: Mapping[str,Any], intelligence: HistoricalIntelligenceRecord, option_records: Sequence[Mapping[str,Any]]=()) -> bool:
-        key=f"{instrument_key}|{interval}|{timestamp.isoformat()}|{intelligence.engine_version}"
+        cadence=max(1,self.settings.cadence_minutes); bucket=int(timestamp.timestamp())//(cadence*60)
+        key=f"{instrument_key}|{interval}|{bucket}|{intelligence.engine_version}"
         if not self.settings.enabled or key in self._keys: return False
         try:
             safe=_sanitize(raw_snapshot); price=safe.get("close",safe.get("spot")) if isinstance(safe,Mapping) else None

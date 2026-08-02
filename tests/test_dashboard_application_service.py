@@ -216,11 +216,12 @@ def harness(monkeypatch):
     )
 
 
-def _execute(harness, *, should_load=True, state=None, client_factory=None):
+def _execute(harness, *, should_load=True, state=None, client_factory=None, capture_service=None):
     return DashboardApplicationService(
         client_factory=client_factory or harness.Client,
         store_factory=harness.Store,
         clock=lambda: "10:11:12",
+        capture_service=capture_service,
     ).execute(
         token="token",
         instrument_key="NSE|TEST",
@@ -233,6 +234,17 @@ def _execute(harness, *, should_load=True, state=None, client_factory=None):
         should_load=should_load,
         session_state={} if state is None else state,
     )
+
+
+def test_live_application_captures_frozen_pipeline_once_without_changing_result(harness):
+    class Capture:
+        def __init__(self): self.calls = []
+        def capture(self, **values): self.calls.append(values); return True
+    capture = Capture()
+    result = _execute(harness, capture_service=capture)
+    assert result.recommendation["status"] == "BUY CE"
+    assert len(capture.calls) == 1
+    assert capture.calls[0]["intelligence"].values["pipeline"] is not None
 
 
 def test_service_preserves_pipeline_outputs_session_keys_and_order(harness):

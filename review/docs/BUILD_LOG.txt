@@ -1,7 +1,34 @@
-Sprint 18.4C build
-- Added market lake implementation and behavioural tests.
-- Added generated-data ignore rule and review package.
-- pytest intentionally NOT RUN; local validation required.
-- Hardened result serialization and enrichment diagnostics.
-- Corrected and expanded the documented outcome/MFE behavioural contract.
-- Separated generic identity-preserving persistence from dashboard runtime-key sanitization.
+Sprint 18.4D.2 Integration Hardening validation log (2026-08-02 UTC)
+
+$ python -m py_compile app.py dashboard_application_service.py itos_platform/historical_options.py itos_platform/live_market_lake.py itos_platform/historical_trade_review.py itos_platform/historical_analytics.py ui/historical_analytics_workspace.py tests/test_dashboard_application_service.py tests/test_historical_trade_review.py
+[exit code: 0]
+
+$ python -m pytest -q tests/test_historical_options_and_live_capture.py tests/test_historical_trade_review.py tests/test_dashboard_application_service.py tests/test_historical_analytics.py
+........................................................................ [ 76%]
+......................                                                   [100%]
+99 passed in 2.52s
+[exit code: 0]
+
+$ python -m pytest -q
+........................................................................ [ 12%]
+........................................................................ [ 25%]
+........................................................................ [ 38%]
+........................................................................ [ 51%]
+........................................................................ [ 64%]
+........................................................................ [ 76%]
+........................................................................ [ 89%]
+..........................................................               [100%]
+567 passed in 8.07s
+[exit code: 0]
+
+$ git diff --check
+[no output]
+[exit code: 0]
+
+$ timeout 12s streamlit run app.py --server.headless true --server.port 8505
+Collecting usage statistics. To deactivate, set browser.gatherUsageStats to false.
+Uvicorn server started on :::8505
+Local URL: http://localhost:8505
+Network URL: http://127.0.0.1:8505
+Stopping...
+[exit code: 124, expected timeout after successful startup]
