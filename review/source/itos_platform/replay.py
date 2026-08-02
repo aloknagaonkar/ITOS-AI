@@ -185,6 +185,36 @@ class CandleCache:
         path.write_text(json.dumps({"schema": self.settings.cache_schema_version, "records": records}))
 
 
+class CachedHistoricalCandleLoader:
+    """Read-through loader that never exposes the cache's mutable frame."""
+
+    _required_columns = frozenset({"timestamp", "open", "high", "low", "close"})
+
+    def __init__(self, source_loader: Callable[[ReplayRequest], pd.DataFrame], cache: Any, *,
+                 source: str = "historical") -> None:
+        self.source_loader = source_loader
+        self.cache = cache
+        self.source = source
+
+    def __call__(self, request: ReplayRequest) -> pd.DataFrame:
+        cached = self.cache.read(
+            self.source, request.instrument_key, request.trading_date,
+            request.interval_minutes,
+        )
+        if isinstance(cached, pd.DataFrame) and self._required_columns <= set(cached.columns):
+            return cached.copy(deep=True)
+
+        loaded = self.source_loader(request)
+        if not isinstance(loaded, pd.DataFrame):
+            return pd.DataFrame(columns=sorted(self._required_columns))
+        source_copy = loaded.copy(deep=True)
+        self.cache.write(
+            self.source, request.instrument_key, request.trading_date,
+            request.interval_minutes, source_copy,
+        )
+        return source_copy.copy(deep=True)
+
+
 class HistoricalCandleDownloader:
     def __init__(self, client: Any, max_days_per_request: int = 30) -> None:
         self.client, self.max_days = client, max_days_per_request
@@ -218,7 +248,7 @@ class HistoricalReplayProvider:
             if option and normalize_timestamp(option[0], self.settings.timezone) > cutoff: option = None
         status = option[2] if option else (HistoricalOptionStatus.NOT_REQUESTED if not request.requested_option_snapshot else HistoricalOptionStatus.UNAVAILABLE)
         complete = ReplayCompleteness.FULL_REPLAY if status == HistoricalOptionStatus.AVAILABLE else ReplayCompleteness.PARTIAL_OPTION_REPLAY if status == HistoricalOptionStatus.PARTIAL else ReplayCompleteness.CANDLE_ONLY_REPLAY
-        flags = tuple(x for x, yes in (("CANDLES_EMPTY", included.empty), ("DUPLICATE_CANDLES_REMOVED", duplicates > 0), ("FUTURE_CANDLES_EXCLUDED", future > 0), ("CANDLES_INSUFFICIENT", len(included) < self.settings.minimum_candles)) if yes)
+        flags = tuple(x for x, yes in (("CANDLES_EMPTY", included.empty), ("DUPLICATE_CANDLES_REMOVED", duplicates > 0), ("FUTURE_CANDLES_EXCLUDED", future > 0), ("CANDLES_INSUFFICIENT", len(included) < self.settings.minimum_candles), ("PARTIAL_OPTION_DATA", status == HistoricalOptionStatus.PARTIAL), ("OPTION_DATA_UNAVAILABLE", status == HistoricalOptionStatus.UNAVAILABLE)) if yes)
         metadata = ReplayMetadata(self.mode, analysis.to_pydatetime(), cutoff.to_pydatetime(), None if included.empty else included.iloc[-1]["timestamp"].to_pydatetime(), option[0] if option else None, self.candle_source, "historical_option_snapshot" if option else None, True, True, True, complete, status, future, invalid, duplicates, int((included["timestamp"].dt.date < request.trading_date).sum()) if not included.empty else 0, int((included["timestamp"].dt.date == request.trading_date).sum()) if not included.empty else 0, flags, ("Point-in-time replay; live fallback is prohibited.",))
         option_result = dict(option[1]) if option else {}
         return MarketSnapshot(option_result=option_result, intelligence=dict((current_context or {}).get("intelligence", {})), historical_candles=included, timestamps={"analysis": analysis.isoformat()}, selected_instrument=request.underlying, expiry=str(request.expiry or ""), timeframe=request.interval_minutes, data_quality={"recommendation_available": bool(option_result), "quality_flags": flags}, data_mode=self.mode, analysis_timestamp=analysis.to_pydatetime(), data_cutoff_timestamp=cutoff.to_pydatetime(), replay_metadata=metadata)
