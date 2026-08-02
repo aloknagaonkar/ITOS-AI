@@ -1,3 +1,5 @@
 # Files Changed
-See the committed Git change list. The source review package mirrors only modified
-source, tests, configuration/ignore, service, snapshot contract, and changelog files.
+Sprint 18.4A hardening modifies the replay cache loader and focused replay/service
+tests, plus the seven requested review documents. The source review package mirrors
+only modified Python source and test files at their repository-relative paths;
+`review/docs` is intentionally excluded.

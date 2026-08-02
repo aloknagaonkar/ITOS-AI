@@ -30,3 +30,24 @@ safe miss. Secrets are never stored.
 Identical inputs and source rows produce fresh, deterministic snapshots. Historical
 failure is surfaced and must never fall back to live Upstox data. Sprint 18.4B owns
 mode controls, timeline navigation, playback, and outcome UI; none is added here.
+
+## Hardening invariants
+
+- **No live fallback:** a missing or mismatched replay provider fails at the
+  application boundary before Upstox acquisition or recommendation generation.
+- **Deterministic replay:** identical requests and provider values produce equal
+  normalized candles, immutable metadata, pipeline values, confidence/validation,
+  ranking state, and quality flags; separate runs need not share object identity.
+- **Cache-copy semantics:** cache hits and source loads return deep copies. Callers
+  may mutate their returned frame without changing the cached/source frame.
+- **Cache corruption:** malformed, unreadable, wrong-schema, or structurally invalid
+  entries are misses. The read-through loader reloads safely and never sends the
+  corrupt value to the decision pipeline.
+- **History isolation:** confidence, phase, stability, decision, strike, and trade
+  histories are filtered inside `DashboardApplicationService` at the replay cutoff.
+- **Candle-only replay:** absent option history is `CANDLE_ONLY_REPLAY` with option
+  status `UNAVAILABLE`; no current chain or synthetic option fields may be used.
+- **Partial-option replay:** incomplete historical contracts are
+  `PARTIAL_OPTION_REPLAY` with option status `PARTIAL`; missing bid/ask, IV, and
+  Greeks stay unavailable and quality metadata must expose the limitation where
+  supported.

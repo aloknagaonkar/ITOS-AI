@@ -14,3 +14,7 @@
 - **Assumptions:** candle timestamps represent interval opens; after-close is rejected.
 - **Temporary debt:** JSON fallback and no bundled holiday calendar.
 - **Confidence:** 8/10 pending required local validation.
+- **Hardening coverage:** behavioral spies prove the common pipeline receives the
+  replay snapshot and cutoff histories; repeated runs compare values, not identity.
+- **Change boundaries:** no analytical formula, safety policy, UI, CE/PE/WAIT rule,
+  persistence schema, export, download, or roadmap sequence was changed.
