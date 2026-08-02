@@ -1,3 +1,3 @@
 # Future Recommendations
 
-Deferred: Wyckoff phases, institutional-evidence aggregation, recommendation/confidence adoption, safety-policy changes, order execution, entry rules, ORB, Fibonacci, liquidity-sweep signals, and dashboard redesign. Any decision influence requires a separately reviewed sprint and calibrated evidence.
+Deferred beyond Sprint 13: Compression Intelligence, Manipulation Intelligence, Institutional Evidence, Decision Confidence Index, trade-planner changes, Market Narrative, historical learning, automated execution, strike rotation/rollover analysis, and dashboard cleanup/redesign. Consider typed strike-level positioning fields after provider coverage and historical validation improve. None is implemented or implied by this sprint.

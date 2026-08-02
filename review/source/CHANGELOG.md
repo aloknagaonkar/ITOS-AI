@@ -1,5 +1,11 @@
 # Changelog
 
+## Sprint 13 - Positioning Intelligence v1
+
+- Added immutable, explainable futures-style and options positioning classifications with evidence, contradictions, confidence, quality flags, and conservative safe degradation.
+- Reused one informational-only result across DecisionContext, DecisionPipeline, PipelineResults, DashboardApplicationResult, Market Status, and the additive Positioning Intelligence panel.
+- Added behavioural contracts, documented configuration and formulas, and created the Sprint 13 modified-source review package without changing recommendations, safety, confidence, strikes, or planning.
+
 ## Sprint 10 - Institutional Metrics Adoption
 
 - Adopted the shared typed InstitutionalMetrics instance across Institutional Radar, Flow, Confidence, and Decision Matrix while retaining legacy mapping adapters.

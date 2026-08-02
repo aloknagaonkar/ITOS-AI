@@ -11,6 +11,10 @@ from .decision_context import (
 )
 from .market_location import MarketLocation, MarketLocationEngine, MarketLocationSettings
 from .volume_structure import VolumeStructure, VolumeStructureEngine, VolumeStructureSettings
+from .positioning_intelligence import (
+    PositioningIntelligence, PositioningIntelligenceEngine,
+    PositioningIntelligenceSettings, PositioningState,
+)
 __all__ = [
     "DataProvider",
     "DecisionContext",
@@ -26,5 +30,9 @@ __all__ = [
     "VolumeStructureEngine",
     "VolumeStructureSettings",
     "ProviderHealth",
+    "PositioningIntelligence",
+    "PositioningIntelligenceEngine",
+    "PositioningIntelligenceSettings",
+    "PositioningState",
     "recommendation_is_available",
 ]
