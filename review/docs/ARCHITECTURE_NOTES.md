@@ -1,9 +1,5 @@
-# Sprint 13 Architecture Notes
+# Architecture Notes
 
-The data path remains `MarketSnapshot → InstitutionalMetrics → DecisionContext → DecisionPipeline → PipelineResults → DashboardApplicationResult → app.py`. `PositioningIntelligenceEngine` runs after `VolumeStructureEngine`, performs no repository or Streamlit access, and returns one frozen `PositioningIntelligence` composed of frozen `PositioningState` values. The exact instance is placed in the context engine-result mapping and named context field, then passed into PipelineResults and its existing dashboard compatibility mapping. The dashboard only renders the supplied result.
+The engine accepts `DecisionContext` or a deliberately separate legacy mapping adapter. It reads only the point-in-time snapshot and already-computed typed context; it has no repository, Streamlit, persistence or recommendation dependency. Pipeline placement follows market location, volume structure, positioning, compression context and `FalseBreakoutEngine`. One frozen result is stored in `DecisionContext`, `PipelineResults`, and the dashboard compatibility mapping by identity.
 
-The engine reads validated multi-candle price direction from VolumeStructure, explicitly labelled futures OI from the option-result summary, and options evidence from the normalized InstitutionalMetrics plus the supplied chain. Options OI is used as a futures proxy only when `futures_oi_proxy` explicitly opts in.
-
-## DecisionContext reconciliation test contract
-
-Sprint 13 follow-up tests explicitly preserve the existing reconciliation contract: `DecisionContext.__post_init__` restores a missing named result from `engine_results`. Missing-dependency positioning tests therefore remove the dependency from both representations; production reconciliation and Positioning Intelligence behaviour remain unchanged.
+Compression is represented by a small frozen compatibility contract because the current branch did not contain Sprint 14's typed module. Its unavailable default makes no manipulation inference and does not change any pre-existing formula.

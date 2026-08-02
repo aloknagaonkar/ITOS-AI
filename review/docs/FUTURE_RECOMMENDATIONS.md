@@ -1,3 +1,10 @@
 # Future Recommendations
 
-Deferred beyond Sprint 13: Compression Intelligence, Manipulation Intelligence, Institutional Evidence, Decision Confidence Index, trade-planner changes, Market Narrative, historical learning, automated execution, strike rotation/rollover analysis, and dashboard cleanup/redesign. Consider typed strike-level positioning fields after provider coverage and historical validation improve. None is implemented or implied by this sprint.
+Deferred by scope:
+
+- Institutional Evidence (next sprint), Decision Confidence Index and Trade Readiness Index.
+- Trade Opportunity Ranking, Top 5 CE/PE ranking and Executive Trade Cockpit.
+- Historical calibration by instrument, timeframe and market regime.
+- Validated swing-cluster and compressed-boundary providers.
+- Narrative generation and learning from resolved trap candidates.
+- Any use of manipulation evidence in SafetyGatePolicy, recommendations or execution requires a separately approved sprint.

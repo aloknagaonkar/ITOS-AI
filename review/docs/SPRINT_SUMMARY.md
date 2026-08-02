@@ -1,3 +1,5 @@
-# Sprint 13 Summary — Positioning Intelligence v1
+# Sprint 15 Summary
 
-Sprint 13 adds immutable futures-style and options positioning classifications, cautious meanings and market-impact descriptions, evidence, contradictions, quality flags, and configuration-driven confidence. One result is calculated after Institutional Metrics, Market Location, and Volume Structure and is reused by DecisionContext, PipelineResults, DashboardApplicationResult, Market Status, and the additive dashboard panel. The feature is informational only; recommendation, confidence, safety, strikes, planning, persistence, and execution are unchanged.
+Sprint 15 adds a frozen `ManipulationIntelligence` contract and repository-free engine. It answers whether completed price action shows genuine acceptance or possible failed-acceptance/trap behaviour. The model combines level breaches, range re-entry, rejection anatomy, completed-candle follow-through, volume structure, positioning context, compression-release context, location and legacy false-breakout agreement.
+
+The same result instance is attached to `DecisionContext`, returned by `PipelineResults`, exposed by `DashboardApplicationResult`, summarized in Market Status, and rendered in the additive Manipulation Intelligence expander. It is informational only: no recommendation, safety policy, confidence, strike, plan, or AI Trade Opportunity input was changed.
