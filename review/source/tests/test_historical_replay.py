@@ -4,8 +4,9 @@ import pandas as pd
 import pytest
 
 from itos_platform.replay import (
-    DataMode, HistoricalOptionStatus, HistoricalReplayProvider, ReplayCompleteness,
-    ReplayRequest, SampleDataProvider, filter_history_at_cutoff, normalize_candles,
+    CachedHistoricalCandleLoader, CandleCache, DataMode, HistoricalOptionStatus,
+    HistoricalReplayProvider, ReplayCompleteness, ReplayRequest, ReplaySettings,
+    SampleDataProvider, filter_history_at_cutoff, normalize_candles,
 )
 
 
@@ -72,3 +73,110 @@ def test_utc_provider_timestamp_converts_to_india():
     frame = pd.DataFrame({"timestamp": [datetime(2026, 7, 30, 4, 45, tzinfo=timezone.utc)], "open": [1], "high": [2], "low": [0], "close": [1]})
     normalized, _, _ = normalize_candles(frame)
     assert normalized.iloc[0].timestamp.hour == 10 and normalized.iloc[0].timestamp.minute == 15
+
+
+def test_replay_metadata_integrity_and_candle_only_state():
+    source = pd.DataFrame([
+        {"timestamp": "bad", "open": 1, "high": 2, "low": 0, "close": 1},
+        {"timestamp": "2026-07-30 10:10", "open": 1, "high": 2, "low": 0, "close": 1},
+        {"timestamp": "2026-07-30 10:10", "open": 2, "high": 3, "low": 1, "close": 2},
+        {"timestamp": "2026-07-30 10:15", "open": 3, "high": 4, "low": 2, "close": 3},
+    ])
+    snapshot = HistoricalReplayProvider(lambda _: source).build_market_snapshot(request=request())
+    metadata = snapshot.replay_metadata
+
+    assert metadata.mode is DataMode.HISTORICAL_REPLAY
+    assert metadata.analysis_timestamp.isoformat() == "2026-07-30T10:17:00+05:30"
+    assert metadata.data_cutoff_timestamp.isoformat() == "2026-07-30T10:15:00+05:30"
+    assert metadata.latest_candle_timestamp.isoformat() == "2026-07-30T10:10:00+05:30"
+    assert metadata.option_snapshot_timestamp is None
+    assert metadata.future_candle_count_excluded == 1
+    assert metadata.duplicate_row_count == 1
+    assert metadata.invalid_row_count == 1
+    assert metadata.look_ahead_protected is True
+    assert metadata.replay_completeness is ReplayCompleteness.CANDLE_ONLY_REPLAY
+    assert metadata.historical_option_status is HistoricalOptionStatus.UNAVAILABLE
+    assert "OPTION_DATA_UNAVAILABLE" in metadata.quality_flags
+    assert snapshot.option_result == {}
+
+
+def test_partial_option_snapshot_preserves_missing_market_fields():
+    class PartialOptions:
+        def nearest_at_or_before(self, **kwargs):
+            return (
+                datetime(2026, 7, 30, 10, 14),
+                {"chain": [{"strike": 25000, "last_price": 100}]},
+                HistoricalOptionStatus.PARTIAL,
+            )
+
+    snapshot = HistoricalReplayProvider(
+        lambda _: candles(), option_source=PartialOptions()
+    ).build_market_snapshot(request=request())
+
+    assert snapshot.replay_metadata.replay_completeness is ReplayCompleteness.PARTIAL_OPTION_REPLAY
+    assert snapshot.replay_metadata.historical_option_status is HistoricalOptionStatus.PARTIAL
+    assert "PARTIAL_OPTION_DATA" in snapshot.replay_metadata.quality_flags
+    contract = snapshot.option_result["chain"][0]
+    assert {"bid", "ask", "iv", "delta", "gamma", "theta", "vega"}.isdisjoint(contract)
+
+
+def test_cached_loader_hit_returns_copies_and_avoids_source_retrieval():
+    writes = []
+
+    class Cache:
+        value = None
+        def read(self, *key):
+            return self.value
+        def write(self, *key_and_frame):
+            frame = key_and_frame[-1]
+            self.value = frame.copy(deep=True)
+            writes.append(key_and_frame[:-1])
+
+    calls = []
+    source = candles()
+    cache = Cache()
+    loader = CachedHistoricalCandleLoader(
+        lambda replay_request: calls.append(replay_request) or source, cache,
+        source="fixture",
+    )
+
+    first = loader(request())
+    second = loader(request())
+    pd.testing.assert_frame_equal(first, second)
+    assert len(calls) == 1 and len(writes) == 1
+    assert first is not cache.value and second is not cache.value
+    first.loc[0, "close"] = 999
+    assert cache.value.loc[0, "close"] != 999
+    pd.testing.assert_frame_equal(source, candles())
+
+
+def test_corrupt_cache_is_reloaded_and_never_returned():
+    class Cache:
+        value = pd.DataFrame({"corrupt": ["payload"]})
+        writes = 0
+        def read(self, *key):
+            return self.value
+        def write(self, *key_and_frame):
+            self.writes += 1
+            self.value = key_and_frame[-1].copy(deep=True)
+
+    cache = Cache()
+    loaded = CachedHistoricalCandleLoader(lambda _: candles(), cache)(request())
+    assert cache.writes == 1
+    assert "corrupt" not in loaded
+    assert {"timestamp", "open", "high", "low", "close"} <= set(loaded)
+
+
+def test_candle_cache_keys_are_isolated_by_source_instrument_interval_and_day(tmp_path):
+    cache = CandleCache(ReplaySettings(cache_root=tmp_path))
+    keys = (
+        ("upstox", "NSE|A", date(2026, 7, 30), 5),
+        ("archive", "NSE|A", date(2026, 7, 30), 5),
+        ("upstox", "NSE|B", date(2026, 7, 30), 5),
+        ("upstox", "NSE|A", date(2026, 7, 31), 5),
+        ("upstox", "NSE|A", date(2026, 7, 30), 15),
+    )
+    for marker, key in enumerate(keys):
+        frame = pd.DataFrame({"timestamp": ["2026-07-30 10:00"], "close": [marker]})
+        cache.write(*key, frame)
+    assert [cache.read(*key).loc[0, "close"] for key in keys] == list(range(5))

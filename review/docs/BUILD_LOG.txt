@@ -1,4 +1,7 @@
-Sprint 18.4A build
+Sprint 18.4A hardening build
+Developer baseline before hardening: 404 passed in 5.57s
+Redundant decision-history query: removed/verified single call
+Behavioral replay safety tests: added
 python -m py_compile (all modified Python files): PASS
 git diff --check: PASS
 pytest: NOT RUN — LOCAL VALIDATION REQUIRED
