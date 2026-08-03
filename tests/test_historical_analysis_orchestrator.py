@@ -113,3 +113,42 @@ def test_index_result_mapping_and_readiness(index_result,index_status,final_stat
  row=result.progress.date_statuses[0]
  assert row.index==index_status
  assert row.final==final_status
+
+@pytest.mark.parametrize(("option_result","expected"),(
+ (Result(expiries_discovered=0,contracts_discovered=0,contracts_stored=0,failed_contracts=0,status="OPTION_DATA_UNAVAILABLE"),"Options Unavailable"),
+ (Result(expiries_discovered=1,contracts_discovered=0,contracts_stored=0,failed_contracts=0,status="OPTION_DATA_UNAVAILABLE"),"Options Unavailable"),
+ (Result(expiries_discovered=1,contracts_discovered=2,contracts_stored=1,failed_contracts=1,status="PARTIAL_OPTION_COVERAGE"),"Partial Options"),
+))
+def test_option_no_data_or_partial_continues_to_intelligence(option_result,expected):
+ orch,calls=pipeline(download_options=lambda _request:option_result)
+ result=orch.run(request(start_date=D1,end_date=D1))
+ row=result.progress.date_statuses[0]
+ assert row.options==expected and row.options!="Pending"
+ assert row.intelligence=="Intelligence Complete"
+ assert any(call[0]=="intel" for call in calls)
+ assert row.final in {"Candle-only","Ready"}
+
+@pytest.mark.parametrize("error",(
+ TimeoutError("provider timed out"),PermissionError("authentication failed"),RuntimeError("provider no-data"),
+))
+def test_option_failure_is_non_blocking_and_candle_only(error):
+ def options(_request): raise error
+ orch,calls=pipeline(download_options=options)
+ result=orch.run(request(start_date=D1,end_date=D1))
+ row=result.progress.date_statuses[0]
+ assert row.options=="Options Unavailable" and row.intelligence=="Intelligence Complete"
+ assert row.final=="Candle-only" and any(call[0]=="intel" for call in calls)
+
+def test_unavailable_option_service_skips_immediately_and_continues():
+ orch,calls=pipeline(download_options=None)
+ result=orch.run(request(start_date=D1,end_date=D1))
+ row=result.progress.date_statuses[0]
+ assert row.options=="Options Unavailable" and row.intelligence=="Intelligence Complete"
+ assert row.final=="Candle-only" and not any(call[0]=="options" for call in calls)
+
+def test_oauth_token_is_not_logged_on_option_failure(tmp_path,caplog):
+ def options(_request): raise RuntimeError("access_token=SECRET authorization=Bearer_SECRET")
+ settings=HistoricalAnalysisSettings(historical_log_root=str(tmp_path))
+ pipeline(download_options=options,settings=settings)[0].run(request(start_date=D1,end_date=D1),run_id="secret")
+ text=(tmp_path/date.today().isoformat()/"run_secret.log").read_text()
+ assert "SECRET" not in text and "Bearer_SECRET" not in text

@@ -84,8 +84,10 @@ class HistoricalPipelineObserver:
     def stage_failed(self, stage: str, error: BaseException, *, day: date | None = None) -> None:
         duration = time.monotonic() - self._starts.get(stage, time.monotonic())
         self.diagnostics.stage_durations[stage] = duration
-        self.diagnostics.last_exception = f"{type(error).__name__}: {error}"
-        self.logger.exception("%s failed stage=%s date=%s duration_seconds=%.3f exception_type=%s message=%s",
+        self.diagnostics.last_exception = f"{type(error).__name__}: {_safe(error)}"
+        # Do not attach a traceback: exception source lines and locals can contain
+        # OAuth credentials even when the formatted exception has been redacted.
+        self.logger.error("%s failed stage=%s date=%s duration_seconds=%.3f exception_type=%s message=%s",
             stage, stage, day, duration, type(error).__name__, _safe(error))
 
     def date_status(self, day: date, stage: str, status: str, **metrics: Any) -> None:

@@ -3,18 +3,21 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
+import inspect
+import logging
+import time
 from typing import Any, Mapping, Protocol, Sequence
 
 import pandas as pd
 
-from .historical_sync import HistoricalMalformedResponseError, HistoricalProviderError, normalize_historical_candles
+from .historical_sync import HistoricalMalformedResponseError, normalize_historical_candles
 from .market_lake import LocalHistoricalMarketLake
 
 
 class ExpiredOptionClient(Protocol):
-    def get_expired_option_expiries(self, instrument_key: str) -> Sequence[str]: ...
-    def get_expired_option_contracts(self, instrument_key: str, expiry_date: str) -> Sequence[Mapping[str, Any]]: ...
-    def get_expired_historical_candles(self, expired_instrument_key: str, from_date: str, to_date: str, *, interval: int) -> pd.DataFrame: ...
+    def get_expired_option_expiries(self, instrument_key: str, *, timeout: float | None = None) -> Sequence[str]: ...
+    def get_expired_option_contracts(self, instrument_key: str, expiry_date: str, *, timeout: float | None = None) -> Sequence[Mapping[str, Any]]: ...
+    def get_expired_historical_candles(self, expired_instrument_key: str, from_date: str, to_date: str, *, interval: int, timeout: float | None = None) -> pd.DataFrame: ...
 
 
 @dataclass(frozen=True)
@@ -25,18 +28,40 @@ class HistoricalOptionDownloadResult:
 
 class HistoricalOptionDownloadService:
     """Explicit, read-only provider workflow; construction never makes a request."""
-    def __init__(self, client: ExpiredOptionClient, lake: LocalHistoricalMarketLake, *, provider: str = "upstox"):
+    def __init__(self, client: ExpiredOptionClient, lake: LocalHistoricalMarketLake, *, provider: str = "upstox",
+                 request_timeout_seconds: float = 20.0):
+        if request_timeout_seconds <= 0: raise ValueError("request_timeout_seconds must be positive")
         self.client, self.lake, self.provider = client, lake, provider
+        self.request_timeout_seconds = request_timeout_seconds
+
+    def _request(self, method_name: str, *args, **kwargs):
+        """Apply the configured HTTP timeout where the provider supports overrides."""
+        method = getattr(self.client, method_name)
+        if "timeout" in inspect.signature(method).parameters:
+            kwargs["timeout"] = self.request_timeout_seconds
+        return method(*args, **kwargs)
 
     def download(self, instrument_key: str, start_date: date, end_date: date) -> HistoricalOptionDownloadResult:
         if start_date > end_date: raise ValueError("start_date must be on or before end_date")
-        try: expiries = tuple(self.client.get_expired_option_expiries(instrument_key))
-        except Exception: raise HistoricalProviderError("Upstox expired-option provider unavailable.") from None
+        started=time.monotonic(); logger=logging.getLogger("historical_pipeline.options")
+        logger.info("expiry discovery started date=%s", start_date)
+        try: expiries = tuple(self._request("get_expired_option_expiries", instrument_key))
+        except Exception as error:
+            status=getattr(getattr(error,"response",None),"status_code",None)
+            logger.warning("expiry discovery failed date=%s elapsed_seconds=%.3f reason=%s http_status=%s final_status=FAILED_NON_BLOCKING",
+                start_date,time.monotonic()-started,type(error).__name__,status if isinstance(status,int) else "unavailable")
+            return HistoricalOptionDownloadResult(0,0,0,0,"OPTION_DATA_UNAVAILABLE",(type(error).__name__,))
+        logger.info("expiry discovery completed date=%s expiries=%d elapsed_seconds=%.3f",start_date,len(expiries),time.monotonic()-started)
+        if not expiries:
+            logger.info("option no-data date=%s reason=empty_expiry_discovery final_status=SKIPPED",start_date)
+            return HistoricalOptionDownloadResult(0,0,0,0,"OPTION_DATA_UNAVAILABLE",("No historical option expiries were available.",))
         discovered = stored = failed = 0
         for expiry_text in expiries:
-            try: expiry = date.fromisoformat(str(expiry_text)); contracts = tuple(self.client.get_expired_option_contracts(instrument_key, expiry_text))
+            try: expiry = date.fromisoformat(str(expiry_text)); contracts = tuple(self._request("get_expired_option_contracts",instrument_key, expiry_text))
             except (ValueError, TypeError): continue
             except Exception: failed += 1; continue
+            if not contracts:
+                logger.info("option no-data date=%s expiry=%s contracts=0 reason=no_contracts",start_date,expiry_text)
             for contract in contracts:
                 discovered += 1
                 key = contract.get("expired_instrument_key") or contract.get("instrument_key")
@@ -44,7 +69,11 @@ class HistoricalOptionDownloadService:
                 strike = contract.get("strike_price")
                 if not key or side not in {"CE", "PE"} or strike is None: failed += 1; continue
                 try:
-                    candles = normalize_historical_candles(self.client.get_expired_historical_candles(str(key), start_date.isoformat(), end_date.isoformat(), interval=1))
+                    candles = normalize_historical_candles(self._request("get_expired_historical_candles",str(key), start_date.isoformat(), end_date.isoformat(), interval=1))
+                    if candles.empty:
+                        failed += 1
+                        logger.info("option no-data date=%s expiry=%s current_request=%s reason=provider_no_data",start_date,expiry_text,key)
+                        continue
                     for day, frame in candles.groupby(candles["timestamp"].dt.date):
                         records = [{"timestamp": row.timestamp.isoformat(), "expiry": expiry.isoformat(), "strike": strike,
                             "side": side, "open": row.open, "high": row.high, "low": row.low, "close": row.close,
@@ -55,7 +84,9 @@ class HistoricalOptionDownloadService:
                         self.lake.store_option_snapshots(self.provider, instrument_key, expiry, day, frame.iloc[-1]["timestamp"].to_pydatetime(), records)
                     stored += 1
                 except (HistoricalMalformedResponseError, Exception): failed += 1
-        status = "PARTIAL_OPTION_REPLAY" if stored else "UNAVAILABLE"
+        status = "PARTIAL_OPTION_COVERAGE" if stored else "OPTION_DATA_UNAVAILABLE"
+        logger.info("option download completed date=%s expiries=%d contracts=%d stored=%d failed=%d elapsed_seconds=%.3f final_status=%s",
+            start_date,len(expiries),discovered,stored,failed,time.monotonic()-started,"PARTIAL" if stored else "FAILED_NON_BLOCKING")
         return HistoricalOptionDownloadResult(len(expiries), discovered, stored, failed, status,
             ("Expired candles do not provide historical bid/ask, IV, or Greeks.",))
 
