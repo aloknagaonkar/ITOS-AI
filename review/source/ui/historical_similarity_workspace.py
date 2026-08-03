@@ -5,7 +5,7 @@ from datetime import date, timedelta
 import pandas as pd
 import streamlit as st
 
-from itos_platform.historical_intelligence_index import SQLiteHistoricalIntelligenceIndex
+from itos_platform.historical_intelligence_index import SQLiteHistoricalIntelligenceIndex, MarketFingerprint
 from itos_platform.historical_similarity import (
     HistoricalSimilarityService, SimilarityRequest, export_csv, export_json,
     export_parquet, similarity_rows,
@@ -14,13 +14,30 @@ from itos_platform.historical_similarity import (
 PREFIX = "historical_similarity_"
 
 
-def render_historical_similarity_workspace(index: SQLiteHistoricalIntelligenceIndex | None = None) -> None:
+def render_historical_similarity_workspace(index: SQLiteHistoricalIntelligenceIndex | None = None,
+        *, open_trade_review=None, open_replay=None, back_to_trade_review=None) -> None:
     """Render filters/results without running or mutating any analytical pipeline."""
     st.title("Historical Similarity & Pattern Discovery")
     st.info("Advisory only — observed historical similarity does not change the current recommendation.")
     index = index or SQLiteHistoricalIntelligenceIndex()
     source_mode = st.selectbox("Source", ("Selected Historical Trade", "Selected Replay State", "Current Live State"), key=PREFIX+"source_mode")
-    source_trade_id = st.text_input("Stable Historical Trade ID", value=st.session_state.get(PREFIX+"source_trade_id", ""), key=PREFIX+"source_input").strip()
+    passed_trade_id = st.session_state.get(PREFIX+"source_trade_id", "")
+    if source_mode == "Selected Historical Trade":
+        if passed_trade_id:
+            source_trade_id = passed_trade_id
+            st.caption(f"Selected automatically from Historical Trade Review: {source_trade_id}")
+        else:
+            source_trade_id = st.text_input("Stable Historical Trade ID",
+                                            key=PREFIX+"source_input").strip()
+        source_fingerprint = None
+    elif source_mode == "Selected Replay State":
+        source_trade_id = st.session_state.get("historical_similarity_replay_trade_id", "")
+        source_fingerprint = st.session_state.get("historical_similarity_replay_fingerprint")
+        st.caption("Using the frozen Replay source; no decision pipeline is rerun.")
+    else:
+        source_trade_id = ""
+        source_fingerprint = st.session_state.get("historical_similarity_live_fingerprint")
+        st.caption("Using the frozen Live result already shown on the dashboard; no pipeline rerun occurs.")
     cols=st.columns(3)
     instrument=cols[0].text_input("Instrument", key=PREFIX+"instrument").strip() or None
     start=cols[1].date_input("Start date", value=date.today()-timedelta(days=30), key=PREFIX+"start")
@@ -39,11 +56,13 @@ def render_historical_similarity_workspace(index: SQLiteHistoricalIntelligenceIn
             if key.startswith(PREFIX): del st.session_state[key]
         st.rerun()
     if actions[0].button("Find Similar Markets",type="primary",key=PREFIX+"find"):
-        if not source_trade_id:
-            st.session_state[PREFIX+"error"] = f"{source_mode} requires a frozen indexed Trade ID."
+        if not source_trade_id and not isinstance(source_fingerprint, MarketFingerprint):
+            st.session_state[PREFIX+"error"] = f"{source_mode} is not available yet. Open its source screen first."
         else:
             try:
-                request=SimilarityRequest(source_trade_id=source_trade_id,instrument_key=instrument,start_date=start,end_date=end,
+                request=SimilarityRequest(source_trade_id=source_trade_id or None,
+                    source_fingerprint=None if source_trade_id else source_fingerprint,
+                    instrument_key=instrument,start_date=start,end_date=end,
                     same_instrument_only=same_instrument,same_recommendation_only=same_recommendation,
                     exclude_same_trading_date=exclude_date,include_opposite_setups=opposites,
                     maximum_candidates=1000,maximum_results=int(maximum),minimum_overall_score=minimum)
@@ -74,6 +93,35 @@ def render_historical_similarity_workspace(index: SQLiteHistoricalIntelligenceIn
     st.subheader("Similar Historical Trades")
     st.dataframe(pd.DataFrame(rows),hide_index=True,use_container_width=True)
     if not rows: st.info("No historical matches satisfy the selected filters and threshold.")
+    else:
+        choices = {f"{match.candidate_analysis_timestamp} • {match.recommendation} • {match.score_breakdown.overall_score:.1%}": match
+                   for match in result.matches}
+        label = st.selectbox("Select similarity match", tuple(choices), key=PREFIX+"selected_match_label")
+        match = choices[label]
+        st.session_state[PREFIX+"selected_match_trade_id"] = match.candidate_trade_id
+        with st.container(border=True):
+            st.subheader("Similarity Match Deep Dive")
+            score = match.score_breakdown
+            metrics = st.columns(4)
+            for column, (name, value) in zip(metrics, (("Overall", score.overall_score),
+                    ("Semantic", score.semantic_score), ("Numeric", score.numeric_score),
+                    ("Context", score.context_score))):
+                column.metric(name, "—" if value is None else f"{value:.1%}")
+            st.markdown("**Shared evidence**")
+            for item in match.difference_analysis.shared_evidence or ("None recorded",): st.markdown(f"- {item}")
+            st.markdown("**Important differences**")
+            for item in match.difference_analysis.important_differences:
+                st.markdown(f"- {item.dimension}: {item.source_value} → {item.candidate_value} ({item.impact})")
+            st.markdown("**Missing evidence**")
+            for item in match.difference_analysis.missing_evidence or ("None recorded",): st.markdown(f"- {item}")
+            st.caption(f"Historical outcome: {match.outcome_classification or 'Unavailable'} • Option data: {match.option_data_status}")
+            nav = st.columns(3)
+            if nav[0].button("Open Historical Trade Review", key=PREFIX+"open_review") and open_trade_review:
+                open_trade_review(match.candidate_trade_id)
+            if nav[1].button("Open Replay", key=PREFIX+"open_replay") and open_replay:
+                open_replay(match.candidate_trade_id, match.candidate_analysis_timestamp)
+            if nav[2].button("Back to Historical Trade Review", key=PREFIX+"back_review") and back_to_trade_review:
+                back_to_trade_review()
     downloads=st.columns(3)
     downloads[0].download_button("Export CSV",export_csv(result),"historical_similarity.csv","text/csv")
     downloads[1].download_button("Export JSON",export_json(result),"historical_similarity.json","application/json")
