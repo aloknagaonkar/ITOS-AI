@@ -1,0 +1,9 @@
+# Historical Analysis Orchestrator — Hardened Sprint 18.4F.2
+
+The immutable orchestrator runs `PLAN → DOWNLOAD_UNDERLYING → DOWNLOAD_OPTIONS → BUILD_INTELLIGENCE → BUILD_OUTCOMES → BUILD_INDEX → PREPARE_ANALYTICS → COMPLETE`. `STAGE_ORDER` is explicit; progress is derived from planned and actually processed per-date work units rather than fixed stage jumps.
+
+Each existing service is called for one eligible date at a time. Its real result is mapped into the immutable date row: raw completed/skipped/no-data/failed dates and row counts; option contract/expiry success and failure totals; intelligence completion/failure; outcome complete/pending/not-evaluable status; and index completed/skipped/failed counts. A date cannot enter a dependent stage until its prerequisite is available. Option failure stays non-blocking, while one failed date does not contaminate successful dates. Selected intelligence cadence is passed to the existing builder.
+
+Checkpoints use schema version 2, atomic replacement, stable run IDs and token-free request/progress data. `load()` validates and reconstructs typed dates/contracts. A new orchestrator instance can resume, skipping successful raw, intelligence, outcome and index work unless rebuild was explicitly requested. Partial/cancelled runs are discoverable. Retry Failed Dates resumes incomplete work; Retry Index Only touches only index-eligible dates.
+
+Cancellation is checked after each atomic per-date service request. The in-flight request finishes or fails, its real result is checkpointed, and the run then returns `CANCELLED`. A new run resets the process-local cancellation flag. Stored source data is never deleted because options, intelligence, outcomes, index, or analytics later fails.
