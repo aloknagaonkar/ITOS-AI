@@ -52,7 +52,7 @@ def test_option_partial_is_isolated_to_one_date():
  def options(req): return Result(expiries_discovered=1,contracts_discovered=4,contracts_stored=3,
   failed_contracts=1 if req.start_date==D1 else 0,status="PARTIAL")
  result=pipeline(download_options=options)[0].run(request())
- assert [r.options for r in result.progress.date_statuses]==["Partial Options","Available"]
+ assert [r.options for r in result.progress.date_statuses]==["Partial","Available"]
  assert result.progress.option_contracts_failed==1
 
 def test_intelligence_failure_outcome_pending_and_index_failure_are_isolated():
@@ -115,9 +115,9 @@ def test_index_result_mapping_and_readiness(index_result,index_status,final_stat
  assert row.final==final_status
 
 @pytest.mark.parametrize(("option_result","expected"),(
- (Result(expiries_discovered=0,contracts_discovered=0,contracts_stored=0,failed_contracts=0,status="OPTION_DATA_UNAVAILABLE"),"Options Unavailable"),
- (Result(expiries_discovered=1,contracts_discovered=0,contracts_stored=0,failed_contracts=0,status="OPTION_DATA_UNAVAILABLE"),"Options Unavailable"),
- (Result(expiries_discovered=1,contracts_discovered=2,contracts_stored=1,failed_contracts=1,status="PARTIAL_OPTION_COVERAGE"),"Partial Options"),
+ (Result(expiries_discovered=0,contracts_discovered=0,contracts_stored=0,failed_contracts=0,status="OPTION_DATA_UNAVAILABLE"),"Unavailable"),
+ (Result(expiries_discovered=1,contracts_discovered=0,contracts_stored=0,failed_contracts=0,status="OPTION_DATA_UNAVAILABLE"),"Unavailable"),
+ (Result(expiries_discovered=1,contracts_discovered=2,contracts_stored=1,failed_contracts=1,status="PARTIAL_OPTION_COVERAGE"),"Partial"),
 ))
 def test_option_no_data_or_partial_continues_to_intelligence(option_result,expected):
  orch,calls=pipeline(download_options=lambda _request:option_result)
@@ -136,15 +136,22 @@ def test_option_failure_is_non_blocking_and_candle_only(error):
  orch,calls=pipeline(download_options=options)
  result=orch.run(request(start_date=D1,end_date=D1))
  row=result.progress.date_statuses[0]
- assert row.options=="Options Unavailable" and row.intelligence=="Intelligence Complete"
+ assert row.options=="Failed Non-blocking" and row.intelligence=="Intelligence Complete"
  assert row.final=="Candle-only" and any(call[0]=="intel" for call in calls)
 
 def test_unavailable_option_service_skips_immediately_and_continues():
  orch,calls=pipeline(download_options=None)
  result=orch.run(request(start_date=D1,end_date=D1))
  row=result.progress.date_statuses[0]
- assert row.options=="Options Unavailable" and row.intelligence=="Intelligence Complete"
+ assert row.options=="Unavailable" and row.intelligence=="Intelligence Complete"
  assert row.final=="Candle-only" and not any(call[0]=="options" for call in calls)
+
+def test_options_disabled_is_skipped_and_all_dependent_stages_run():
+ orch,calls=pipeline()
+ result=orch.run(request(start_date=D1,end_date=D1,include_historical_options=False))
+ row=result.progress.date_statuses[0]
+ assert row.options=="Skipped" and row.final=="Candle-only"
+ assert [call[0] for call in calls]==["raw","intel","outcome","index"]
 
 def test_oauth_token_is_not_logged_on_option_failure(tmp_path,caplog):
  def options(_request): raise RuntimeError("access_token=SECRET authorization=Bearer_SECRET")

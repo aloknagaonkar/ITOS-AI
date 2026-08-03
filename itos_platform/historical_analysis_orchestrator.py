@@ -147,7 +147,7 @@ class HistoricalAnalysisOrchestrator:
         checkpoint_path=(self.checkpoints.root/f"{run_id}.json") if self.checkpoints else None
         observer=self.observer_factory(run_id,log_root=self.settings.historical_log_root,
             checkpoint_path=checkpoint_path,stall_threshold_seconds=self.settings.stall_threshold_seconds)
-        observer.log("orchestrator.run() called", resume=resume, index_only=index_only)
+        observer.log("orchestrator.run started", resume=resume, index_only=index_only)
         days=tuple(date.fromordinal(n) for n in range(request.start_date.toordinal(),request.end_date.toordinal()+1))
         if loaded: rows=list(loaded.date_statuses)
         else: rows=[DatePipelineStatus(d,"NOT_TRADING_SESSION",underlying="Not Trading Session",options="Not Trading Session",intelligence="Not Trading Session",outcomes="Not Trading Session",index="Not indexed",final="Skipped",explanation="Weekend") if d.weekday()>=5 else DatePipelineStatus(d) for d in days]
@@ -163,7 +163,7 @@ class HistoricalAnalysisOrchestrator:
         def ready(row):
             if row.underlying in {"Provider No Data","Failed"} or row.intelligence=="Intelligence Failed": return "Retry Required"
             if row.intelligence=="Intelligence Complete" and row.outcomes in {"Outcomes Complete","Outcomes Not Evaluable","Outcomes Pending"}:
-                base="Ready" if row.options in {"Available","Partial Options"} else "Candle-only"
+                base="Ready" if row.options in {"Available","Partial"} else "Candle-only"
                 if row.index=="Index Failed": return f"{base} — Similarity unavailable"
                 if row.index in {"Index Pending","Not indexed"}: return "Partial"
                 return base
@@ -171,12 +171,12 @@ class HistoricalAnalysisOrchestrator:
         def emit(stage,status,message,current=None,stage_done=0,stage_total=0):
             nonlocal last_percent
             completed=tuple(r.trading_date for r in rows if ready(r) in {"Ready","Candle-only"}); failed=tuple(r.trading_date for r in rows if ready(r)=="Retry Required")
-            partial=tuple(r.trading_date for r in rows if r.options=="Partial Options" or r.index in {"Index Failed","Index Pending"})
+            partial=tuple(r.trading_date for r in rows if r.options=="Partial" or r.index in {"Index Failed","Index Pending"})
             skipped=tuple(r.trading_date for r in rows if r.final=="Skipped")
             last_percent=max(last_percent,100.*done/max(1,total)); refreshed=tuple(replace(r,final=ready(r)) for r in rows)
             p=HistoricalPipelineProgress(run_id,status,stage.value,status,last_percent,100.*stage_done/max(1,stage_total),current,
                 str(current) if current else None,message,len(days),len(active),sum(r.underlying in {"Existing","Downloaded"} for r in rows),
-                len(active) if request.include_historical_options else 0,sum(r.options=="Available" for r in rows),sum(r.options=="Partial Options" for r in rows),
+                len(active),sum(r.options in {"Available","Skipped","Unavailable","Failed Non-blocking"} for r in rows),sum(r.options=="Partial" for r in rows),
                 len(active),sum(r.intelligence=="Intelligence Complete" for r in rows),len(active),sum(r.outcomes in {"Outcomes Complete","Outcomes Not Evaluable"} for r in rows),
                 len(active),sum(r.index=="Indexed" for r in rows),sum(r.index=="Index Failed" for r in rows),index_outdated,
                 downloaded,stored,completed,partial,failed,skipped,refreshed,
@@ -209,17 +209,21 @@ class HistoricalAnalysisOrchestrator:
                 observer.stage_started(stage.value,active); observer.log(f"{stage.value} skipped",reason=reason)
                 for day in active:
                     if stage is PipelineStage.DOWNLOAD_OPTIONS:
-                        update(day,options="Options Unavailable",explanation="Historical option service unavailable; candle-only replay")
-                    observer.date_status(day,stage.value,"SKIPPED",reason=reason,final_status="OPTION_DATA_UNAVAILABLE")
+                        option_status="Unavailable" if operation is None else "Skipped"
+                        update(day,options=option_status,explanation=("Historical option service unavailable; candle-only replay"
+                            if operation is None else "Historical options disabled; candle-only replay"))
+                    observer.date_status(day,stage.value,"UNAVAILABLE" if operation is None else "SKIPPED",
+                        reason=reason,final_status="OPTION_DATA_UNAVAILABLE" if operation is None else "SKIPPED")
                 observer.stage_completed(stage.value,active)
                 if stage is PipelineStage.DOWNLOAD_OPTIONS:
-                    progress=emit(stage,"SKIPPED","Historical options unavailable; continuing with candle-only replay.",stage_done=len(active),stage_total=len(active))
+                    terminal="UNAVAILABLE" if operation is None else "SKIPPED"
+                    progress=emit(stage,terminal,"Historical options terminated; continuing with candle-only replay.",stage_done=len(active),stage_total=len(active))
                 continue
             candidates=[]
             for row in rows:
                 if row.trading_date not in active:continue
                 if stage is PipelineStage.DOWNLOAD_UNDERLYING and row.underlying in {"Existing","Downloaded"}:continue
-                if stage is PipelineStage.DOWNLOAD_OPTIONS and row.options in {"Available","Partial Options","Options Unavailable"}:continue
+                if stage is PipelineStage.DOWNLOAD_OPTIONS and row.options in {"Available","Partial","Unavailable","Skipped","Failed Non-blocking"}:continue
                 if stage is PipelineStage.BUILD_INTELLIGENCE and (row.underlying not in {"Existing","Downloaded"} or (row.intelligence=="Intelligence Complete" and not request.rebuild_intelligence)):continue
                 if stage is PipelineStage.BUILD_OUTCOMES and (row.intelligence!="Intelligence Complete" or (row.outcomes in {"Outcomes Complete","Outcomes Not Evaluable"} and not request.rebuild_outcomes)):continue
                 if stage is PipelineStage.BUILD_INDEX and (row.intelligence!="Intelligence Complete" or (row.index=="Indexed" and not request.rebuild_index)):continue
@@ -236,6 +240,8 @@ class HistoricalAnalysisOrchestrator:
                 try:
                     if stage is PipelineStage.DOWNLOAD_OPTIONS:
                         observer.log("option request",date=day,current_request="historical option enrichment")
+                    elif stage is PipelineStage.BUILD_INTELLIGENCE:
+                        observer.log("BUILD_INTELLIGENCE started", date=day)
                     value=self._invoke(stage,request,day)
                     if stage is PipelineStage.DOWNLOAD_UNDERLYING:
                         downloaded+=_count(value,"downloaded_row_count"); stored+=_count(value,"stored_row_count")
@@ -252,11 +258,11 @@ class HistoricalAnalysisOrchestrator:
                         complete=_count(value,"contracts_stored"); failures=_count(value,"failed_contracts")
                         partial_dates=_dates(value,"partial_dates"); failed_dates=_dates(value,"failed_dates")
                         completed_dates=_dates(value,"completed_dates")
-                        option_status=("Partial Options" if day in partial_dates or (complete and failures) else
-                            "Available" if day in completed_dates or complete else "Options Unavailable")
-                        if day in failed_dates and not complete: option_status="Options Unavailable"
+                        option_status=("Partial" if day in partial_dates or (complete and failures) else
+                            "Available" if day in completed_dates or complete else "Unavailable")
+                        if day in failed_dates and not complete: option_status="Unavailable"
                         update(day,options=option_status,explanation="Historical option candles evaluated")
-                        terminal="PARTIAL" if option_status=="Partial Options" else "COMPLETE" if option_status=="Available" else "FAILED_NON_BLOCKING"
+                        terminal="PARTIAL" if option_status=="Partial" else "COMPLETE" if option_status=="Available" else "UNAVAILABLE"
                         observer.log("option request completed",date=day,expiries=option_stats[0],contracts=option_stats[1],
                             elapsed_seconds=f"{(datetime.now(timezone.utc)-operation_started).total_seconds():.3f}",reason=getattr(value,"status","OPTION_DATA_UNAVAILABLE"),final_status=terminal)
                     elif stage is PipelineStage.BUILD_INTELLIGENCE:
@@ -295,7 +301,7 @@ class HistoricalAnalysisOrchestrator:
                         index_records=_count(value,"completed") if stage is PipelineStage.BUILD_INDEX else 0)
                 except Exception as error:
                     observer.stage_failed(stage.value,error,day=day)
-                    if stage is PipelineStage.DOWNLOAD_OPTIONS:update(day,options="Options Unavailable",explanation=f"{type(error).__name__}; candle-only replay")
+                    if stage is PipelineStage.DOWNLOAD_OPTIONS:update(day,options="Failed Non-blocking",explanation=f"{type(error).__name__}; candle-only replay")
                     elif stage is PipelineStage.BUILD_INTELLIGENCE:update(day,intelligence="Intelligence Failed",explanation=str(error) or "Intelligence failed")
                     elif stage is PipelineStage.BUILD_OUTCOMES:update(day,outcomes="Outcomes Pending",explanation=str(error) or "Outcomes pending")
                     elif stage is PipelineStage.BUILD_INDEX:update(day,index="Index Failed",explanation=str(error) or "Index failed")
@@ -311,7 +317,7 @@ class HistoricalAnalysisOrchestrator:
             observer.stage_completed(stage.value,candidates)
             if stage is PipelineStage.DOWNLOAD_OPTIONS:
                 statuses={next(row for row in rows if row.trading_date==day).options for day in candidates}
-                terminal="PARTIAL" if "Partial Options" in statuses else "COMPLETE" if statuses=={"Available"} else "FAILED_NON_BLOCKING"
+                terminal="PARTIAL" if "Partial" in statuses else "COMPLETE" if statuses=={"Available"} else "FAILED_NON_BLOCKING" if "Failed Non-blocking" in statuses else "UNAVAILABLE"
                 progress=emit(stage,terminal,"Historical option enrichment finished; continuing to ITOS Intelligence.",stage_done=len(candidates),stage_total=len(candidates))
         if not index_only and self.operations.get(PipelineStage.PREPARE_ANALYTICS):
             observer.stage_started(PipelineStage.PREPARE_ANALYTICS.value,active)
@@ -332,7 +338,7 @@ class HistoricalAnalysisOrchestrator:
         done=total
         observer.diagnostics.stage_durations["TOTAL"]=(datetime.now(timezone.utc)-started).total_seconds()
         progress=emit(PipelineStage.COMPLETE,status,"Results ready." if analytics is not None else "Processing complete.",stage_done=1,stage_total=1)
-        observer.log("COMPLETE",status=status); observer.log("orchestrator.run() returned",status=status)
+        observer.log("final_status",status=status); observer.log("orchestrator.run completed",status=status)
         observer.close()
         return HistoricalAnalysisRunResult(run_id,status,progress,analytics,started,datetime.now(timezone.utc),observer.diagnostics)
     def retry_failed_dates(self,request,run_id,**kwargs): return self.run(request,run_id=run_id,resume=True,**kwargs)

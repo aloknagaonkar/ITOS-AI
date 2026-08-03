@@ -27,7 +27,7 @@ from itos_platform.historical_trade_review import (
 from itos_platform.historical_intelligence_index import make_trade_id
 from itos_platform.historical_analysis_orchestrator import (
     HistoricalAnalysisOrchestrator, HistoricalAnalysisRunRequest,
-    HistoricalAnalysisSettings, HistoricalPipelineProgress, JsonRunCheckpointStore,
+    HistoricalAnalysisSettings, HistoricalPipelineProgress, JsonRunCheckpointStore, PipelineStage, STAGE_ORDER,
 )
 from itos_platform.historical_pipeline_observability import (
     HistoricalPipelineObserver, generate_run_id, normalize_dataframe,
@@ -208,9 +208,23 @@ def pipeline_stage_rows(progress: HistoricalPipelineProgress) -> tuple[Mapping[s
         ("Outcomes", progress.outcome_complete, progress.outcome_total),
         ("Historical index", progress.index_complete, progress.index_total),
     )
-    return tuple({"Stage": name, "Status": "Complete" if total and complete >= total else
-        "Running" if complete else "Waiting", "Completed": complete, "Total": total}
-        for name, complete, total in values)
+    current = next((index for index, stage in enumerate(PipelineStage)
+        if stage.value == progress.stage), len(PipelineStage))
+    stage_order = (PipelineStage.DOWNLOAD_UNDERLYING, PipelineStage.DOWNLOAD_OPTIONS,
+        PipelineStage.BUILD_INTELLIGENCE, PipelineStage.BUILD_OUTCOMES, PipelineStage.BUILD_INDEX)
+    rows = []
+    for (name, complete, total), stage in zip(values, stage_order):
+        statuses = {row.options for row in progress.date_statuses} if stage is PipelineStage.DOWNLOAD_OPTIONS else set()
+        if stage is PipelineStage.DOWNLOAD_OPTIONS and statuses:
+            terminal = statuses - {"Pending", "Waiting"}
+            status = ("Failed Non-blocking" if "Failed Non-blocking" in terminal else "Partial" if "Partial" in terminal
+                else "Unavailable" if "Unavailable" in terminal else "Skipped" if terminal == {"Skipped"}
+                else "Complete" if terminal == {"Available"} else "Running")
+        elif STAGE_ORDER[stage] < current or (total and complete >= total): status = "Complete"
+        elif STAGE_ORDER[stage] == current: status = "Running"
+        else: status = "Waiting"
+        rows.append({"Stage": name, "Status": status, "Completed": complete, "Total": total})
+    return tuple(rows)
 
 
 class PipelineProgressPresenter:
@@ -355,7 +369,7 @@ def render_historical_analytics_workspace(underlyings: Mapping[str, str], *, pro
         interval = advanced[0].selectbox("Interval", lake.settings.supported_intervals, key="historical_simple_ui_interval")
         cadence = advanced[1].selectbox("Analysis cadence", lake.settings.supported_analysis_cadences,
             index=2, key="historical_simple_ui_cadence")
-        include_options = advanced[2].checkbox("Historical options", True, key="historical_simple_ui_options")
+        include_options = advanced[2].checkbox("Include Historical Options", True, key="historical_simple_ui_options")
         rebuild_intel = st.checkbox("Rebuild intelligence", False, key="historical_simple_ui_rebuild_intelligence")
         rebuild_outcomes = st.checkbox("Rebuild outcomes", False, key="historical_simple_ui_rebuild_outcomes")
         rebuild_index = st.checkbox("Rebuild index", False, key="historical_simple_ui_rebuild_index")
@@ -441,6 +455,8 @@ def render_historical_analytics_workspace(underlyings: Mapping[str, str], *, pro
         st.info("Choose an underlying and dates, then click **Download & Analyze**. Nothing runs before that click.")
         return
     _coverage(result)
+    if not result.records:
+        st.info("No historical intelligence records were produced for the selected period.")
     manifest = lake.get_manifest(provider, instrument, interval)
     expected = tuple(start + timedelta(days=i) for i in range((end-start).days+1)
                      if (start + timedelta(days=i)).weekday() < 5)
