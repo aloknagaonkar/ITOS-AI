@@ -32,7 +32,8 @@ def test_structured_stage_date_duration_exception_and_persistent_log(tmp_path):
     path = observer.log_path; observer.close(); content = path.read_text()
     assert "PLAN started" in content and "PLAN completed" in content and "duration_seconds=" in content
     assert "date=2026-07-30" in content and "status=existing" in content
-    assert "RuntimeError" in content and "Traceback" in content and "Possible stalled stage" in content
+    assert "RuntimeError" in content and "provider broke" in content and "Possible stalled stage" in content
+    assert "Traceback" not in content
     assert "Bearer-secret" not in content and "[REDACTED]" in content
 
 
@@ -43,7 +44,7 @@ def test_orchestrator_entry_exit_and_all_stages_are_logged(tmp_path):
     request = HistoricalAnalysisRunRequest("NIFTY", "NIFTY", DAY, DAY, include_historical_options=False)
     run = HistoricalAnalysisOrchestrator(sync_underlying=raw, observer_factory=observer_factory).run(request, run_id="ENTRY1")
     content = next(tmp_path.rglob("run_ENTRY1.log")).read_text()
-    assert "orchestrator.run() called" in content and "orchestrator.run() returned" in content
+    assert "orchestrator.run started" in content and "orchestrator.run completed" in content
     assert "PREPARE_ANALYTICS skipped reason=operation unavailable; analytics not executed" in content
     assert run.diagnostics.stage_durations["TOTAL"] >= 0
 
