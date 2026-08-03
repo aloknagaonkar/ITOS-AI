@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 import time
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from urllib.parse import urlencode
 
 import pandas as pd
@@ -59,7 +59,7 @@ from dashboard_application_service import (
     DashboardDataUnavailable,
 )
 from itos_platform.replay import (
-    DataMode, SampleDataProvider, build_upstox_historical_replay_provider,
+    DataMode, HistoricalReplayProvider, SampleDataProvider, build_upstox_historical_replay_provider,
 )
 from itos_platform.replay_ux import change_data_mode, initialize_replay_state
 from ui.replay_workspace import render_replay_workspace
@@ -68,6 +68,11 @@ from ui.historical_similarity_workspace import render_historical_similarity_work
 from itos_platform.historical_analytics import WorkspaceMode
 from itos_platform.historical_sync import HistoricalSyncManager, UpstoxHistoricalSyncProvider
 from itos_platform.market_lake import LocalHistoricalMarketLake
+from itos_platform.historical_pipeline import compose_historical_pipeline
+from ui.historical_analytics_workspace import MarketLakeActions
+from itos_platform.market_lake import serialize_dashboard_result
+from itos_platform.historical_intelligence_index import build_fingerprint
+from itos_platform.replay import ReplayRequest
 
 load_dotenv()
 st.set_page_config(
@@ -152,20 +157,71 @@ st.caption(
 )
 token = auth()
 authenticated_client = UpstoxClient(token) if token else None
+historical_pipeline = compose_historical_pipeline(authenticated_client)
 initialize_replay_state(st.session_state)
+workspace_modes = (*tuple(WorkspaceMode), "HISTORICAL_SIMILARITY")
+requested_workspace = st.session_state.pop("historical_pipeline_requested_workspace", None)
+requested_index = next((i for i, value in enumerate(workspace_modes)
+                        if value == requested_workspace or getattr(value, "value", None) == requested_workspace), 0)
 workspace_mode = st.sidebar.selectbox(
-    "Top Level Mode", (*tuple(WorkspaceMode), "HISTORICAL_SIMILARITY"),
+    "Top Level Mode", workspace_modes, index=requested_index,
     format_func=lambda mode: (mode.value if isinstance(mode, WorkspaceMode) else mode).replace("_", " "),
 )
 if workspace_mode is WorkspaceMode.HISTORICAL_ANALYTICS:
-    historical_lake = LocalHistoricalMarketLake()
-    historical_provider = (UpstoxHistoricalSyncProvider(client=authenticated_client)
-                           if authenticated_client is not None else None)
-    render_historical_analytics_workspace(UNDERLYINGS, lake=historical_lake,
-        sync_manager=HistoricalSyncManager(provider=historical_provider, market_lake=historical_lake))
+    def open_similarity(trade_id):
+        st.session_state["historical_similarity_source_trade_id"] = trade_id
+        st.session_state["historical_similarity_source_mode"] = "Selected Historical Trade"
+        st.session_state["historical_pipeline_requested_workspace"] = "HISTORICAL_SIMILARITY"
+        st.rerun()
+    def pipeline_status(request):
+        records = historical_pipeline.intelligence_records(request)
+        status = historical_pipeline.index.get_status(records)
+        manifest = historical_pipeline.lake.get_manifest("upstox", request.instrument_key, request.interval_minutes)
+        raw = len(manifest.available_dates) if manifest else 0
+        outcomes = len(manifest.outcome_dates) if manifest else 0
+        options = len(manifest.option_dates) if manifest else 0
+        next_action = ("Download raw data" if not raw else "Build intelligence" if not records
+                       else "Build outcomes" if not outcomes else "Build missing index" if status.missing_index_records
+                       else "Index is ready")
+        return {"Raw Data": f"{raw} session(s)", "Historical Options": f"{options} session(s)",
+                "Intelligence": f"{len(records)} record(s)", "Outcomes": f"{outcomes} session(s)",
+                "Index": f"{status.total_indexed_records} indexed / {status.missing_index_records} missing / {status.outdated_fingerprint_records} outdated / {status.invalid_records} invalid",
+                "Similarity": "index ready" if status.total_indexed_records else "index not ready",
+                "Index path": str(historical_pipeline.index.settings.historical_index_path),
+                "Recommended Next Action": next_action}
+    actions = MarketLakeActions(
+        build_intelligence=lambda request: historical_pipeline.build_intelligence(request),
+        build_outcomes=historical_pipeline.build_outcomes,
+        build_index=historical_pipeline.build_index,
+        validate_index=historical_pipeline.validate_index,
+        rebuild_outdated=lambda request: historical_pipeline.build_index(request, rebuild_outdated=True),
+        finalize_today=lambda request: historical_pipeline.finalization.finalize(
+            request.instrument_key, request.interval_minutes, date.today(),
+            historical_pipeline.lake.settings.engine_version),
+        download_options=(None if historical_pipeline.option_service is None else
+            lambda request: historical_pipeline.option_service.download(
+                request.instrument_key, request.start_date, request.end_date)),
+        index_status=pipeline_status,
+    )
+    render_historical_analytics_workspace(UNDERLYINGS, lake=historical_pipeline.lake,
+        actions=actions, sync_manager=historical_pipeline.sync_manager,
+        open_similarity=open_similarity)
     st.stop()
 if workspace_mode == "HISTORICAL_SIMILARITY":
-    render_historical_similarity_workspace()
+    def open_trade_review(trade_id=None):
+        if trade_id:
+            st.session_state["historical_trade_review_selected_trade_id"] = trade_id
+        st.session_state["historical_pipeline_requested_workspace"] = WorkspaceMode.HISTORICAL_ANALYTICS.value
+        st.rerun()
+    def open_similarity_replay(trade_id, timestamp):
+        st.session_state["historical_similarity_replay_trade_id"] = trade_id
+        st.session_state["historical_similarity_replay_target"] = timestamp
+        st.session_state["historical_similarity_return_available"] = True
+        st.session_state["historical_pipeline_requested_workspace"] = WorkspaceMode.HISTORICAL_REPLAY.value
+        st.rerun()
+    render_historical_similarity_workspace(historical_pipeline.index,
+        open_trade_review=open_trade_review, open_replay=open_similarity_replay,
+        back_to_trade_review=open_trade_review)
     st.stop()
 selected_mode = {
     WorkspaceMode.LIVE: DataMode.LIVE,
@@ -180,6 +236,11 @@ if selected_mode is not DataMode.LIVE and workspace == "Historical Replay":
     def replay_provider_factory(mode: DataMode):
         if mode is DataMode.SAMPLE_DATA:
             return SampleDataProvider()
+        if st.session_state.get("historical_similarity_return_available"):
+            return HistoricalReplayProvider(
+                lambda request: historical_pipeline.lake.load_raw_candles(
+                    "upstox", request.instrument_key, request.interval_minutes,
+                    request.trading_date), candle_source="market_lake")
         return build_upstox_historical_replay_provider(authenticated_client)
     render_replay_workspace(selected_mode, st.session_state, replay_provider_factory, UNDERLYINGS)
     st.stop()
@@ -287,6 +348,29 @@ if dashboard_result.values.get("data_unavailable"):
     st.warning(dashboard_result.warning)
     st.stop()
 
+# Capture the exact already-computed Live result. Persistence is advisory and
+# failure-isolated; it never changes or reruns the recommendation pipeline.
+if should_load:
+    try:
+        live_candles = dashboard_result.market_snapshot.historical_candles
+        last = live_candles.iloc[-1] if isinstance(live_candles, pd.DataFrame) and not live_candles.empty else None
+        stamp = pd.Timestamp(last["timestamp"] if last is not None else datetime.now()).to_pydatetime()
+        request = ReplayRequest(underlying, UNDERLYINGS[underlying], stamp.date(), stamp, timeframe,
+                                requested_option_snapshot=bool(dashboard_result.values.get("option_result")))
+        frozen_record = serialize_dashboard_result(dashboard_result, request, "upstox",
+                                                    historical_pipeline.lake.settings)
+        st.session_state["historical_similarity_live_fingerprint"] = build_fingerprint(
+            frozen_record, historical_pipeline.index.settings)
+        raw = last.to_dict() if last is not None else {"spot": dashboard_result.values.get("intelligence", {}).get("price")}
+        option_frame = dashboard_result.values.get("option_result", {}).get("chain")
+        option_records = option_frame.to_dict("records") if isinstance(option_frame, pd.DataFrame) else ()
+        captured = historical_pipeline.live_capture.capture(
+            instrument_key=UNDERLYINGS[underlying], interval=timeframe, timestamp=stamp,
+            raw_snapshot=raw, intelligence=frozen_record, option_records=option_records)
+        st.session_state["live_capture_status"] = "STORED" if captured else "SKIPPED"
+    except Exception:
+        st.session_state["live_capture_status"] = "FAILED_SAFE"
+
 # Preserve the variable names consumed by the unchanged presentation layer.
 globals().update(dashboard_result.values)
 s = option_result["summary"]
@@ -305,14 +389,14 @@ with tab_live:
         f"{dashboard_result.market_snapshot.timeframe}-minute candles • "
         f"Last refresh {dashboard_result.market_snapshot.timestamps.get('last_refresh', '-')}"
     )
-    
+
     # Keep only urgent feed failures at the top. The complete Data Health section
     # appears at the bottom of the live dashboard.
     if not data_health_result.metadata.get("trading_allowed", False):
         st.error("⚠ DATA ISSUE — NO TRADE: " + "; ".join(data_health_result.explanation))
     elif data_health_result.vote == "CAUTION":
         st.warning("⚠ Data inputs are degraded. Treat decisions as WATCH until inputs recover.")
-    
+
     # Decision-critical information comes before research and diagnostic sections.
     render_ai_trade_opportunity(ai_trade_opportunity)
 
@@ -323,8 +407,8 @@ with tab_live:
     level2.metric("Resistance", f"{s['resistance']:,.0f}")
     level3.metric("Max Pain", f"{s['max_pain']:,.0f}")
     level4.metric("Spot / ATM", f"{s['spot']:,.2f} / {s['atm']:,.0f}")
-    
-    
+
+
     st.markdown("## ❓ Why is the market behaving this way?")
     st.caption("Institutional Intelligence")
 
@@ -332,33 +416,33 @@ with tab_live:
     # levels so the first screen answers what, why, and whether the trade is ready.
     st.markdown("### AI Institutional Brief")
     st.info(story_result.metadata.get("story", "Institutional story is developing."))
-    
+
     brief1, brief2, brief3, brief4 = st.columns(4)
     brief1.metric("Trade Readiness", f"{readiness_result.metadata.get('readiness_score', 0):.0f}%", readiness_result.metadata.get("status", "WAIT"))
     brief2.metric("Current → Next Phase", f"{transition_result.metadata.get('current_phase', 'Unknown')} → {transition_result.metadata.get('next_phase', 'Unknown')}")
     brief3.metric("Transition Probability", f"{transition_result.metadata.get('transition_probability', 0):.0f}%", transition_result.metadata.get("transition_state", "DEVELOPING"))
     brief4.metric("Institutional Bias", radar_result.metadata.get("institution_bias", "Neutral"), f"Pattern: {pattern_result.metadata.get('primary_pattern', {}).get('name', 'None')}")
-    
+
     st.markdown("#### Version 7.5 Institutional Confirmation")
     v751, v752, v753, v754 = st.columns(4)
     v751.metric("Institutional Confirmation", f"{confirmation_result.score:.0f}/100", confirmation_result.metadata.get("status", "DEVELOPING"))
     v752.metric("Footprint", footprint_result.metadata.get("participant", "UNKNOWN"), f"{footprint_result.score:.0f}% • {footprint_result.metadata.get('behaviour', 'MIXED')}")
     v753.metric("Market Structure", structure_result.metadata.get("primary", {}).get("name", "None"), structure_result.metadata.get("primary", {}).get("status", "INACTIVE"))
     v754.metric("False-Breakout Risk", f"{false_breakout_result.score:.0f}/100", false_breakout_result.metadata.get("label", "LOW"))
-    
+
     conf_rows = pd.DataFrame(confirmation_result.metadata.get("rows", []))
     if not conf_rows.empty:
         conf_rows["Status"] = conf_rows["aligned"].map({True: "✅ ALIGNED", False: "⚠ CONFLICT"})
         with st.expander("Institutional confirmation evidence", expanded=False):
             st.dataframe(conf_rows[["engine", "vote", "score", "weight", "Status"]], use_container_width=True, hide_index=True)
-    
+
     st.markdown("#### Smart Candle & Candle DNA")
     cd1, cd2, cd3, cd4 = st.columns(4)
     cd1.metric("Candle Pattern", smart_candle_result.metadata.get("primary", {}).get("name", "None"))
     cd2.metric("Pattern Reliability", f"{smart_candle_result.score:.0f}%", smart_candle_result.vote)
     cd3.metric("Candle Strength", f"{candle_dna_result.score:.0f}/100", candle_dna_result.metadata.get("grade", "NORMAL"))
     cd4.metric("Candle Volume", f"{candle_dna_result.metadata.get('relative_volume', 0):.2f}×", f"Body {candle_dna_result.metadata.get('body_pct', 0):.0f}%")
-    
+
     custom_dna_patterns = candle_dna_result.metadata.get("custom_patterns_detected", []) or []
     if custom_dna_patterns:
         st.success(
@@ -382,7 +466,7 @@ with tab_live:
                 "or (2) Small Tip — body ≥85%, upper wick ≤3%, and a visible lower tip ≤8% of range. "
                 "Both require recent-bottom or short-downmove context. Candle colour is ignored."
             )
-    
+
     historical_pattern_candles = st.session_state.get("historical_pattern_candles")
     historical_patterns = build_historical_candle_pattern_table(
         historical_pattern_candles, trading_days=2, evaluation_bars=5
@@ -400,7 +484,7 @@ with tab_explorer:
             win_rate = (historical_patterns["Status"].eq("CONFIRMED").sum() / evaluated_count * 100) if evaluated_count else 0
             hp4.metric("Evaluated Win Rate", f"{win_rate:.1f}%")
             hp5.metric("Institution Grade", int((historical_patterns["DNA Grade"] == "INSTITUTION GRADE").sum()))
-    
+
             f1, f2, f3 = st.columns(3)
             with f1:
                 direction_filter = st.multiselect(
@@ -418,7 +502,7 @@ with tab_explorer:
                     "Minimum reliability", 0, 100, 40, 5,
                     key="historical_candle_reliability_filter",
                 )
-    
+
             filtered_patterns = historical_patterns[
                 historical_patterns["Direction"].isin(direction_filter)
                 & historical_patterns["Status"].isin(status_filter)
@@ -441,14 +525,14 @@ with tab_explorer:
                 ),
                 mime="text/csv",
             )
-    
+
             st.markdown("##### Pattern Performance Statistics")
             pattern_stats = build_pattern_statistics(historical_patterns)
             if pattern_stats.empty:
                 st.info("More completed forward candles are required before performance statistics can be calculated.")
             else:
                 st.dataframe(pattern_stats, use_container_width=True, hide_index=True)
-    
+
             st.markdown("##### Pattern Replay & Evidence Locker")
             replay_options = filtered_patterns["Pattern ID"].tolist()
             if replay_options:
@@ -467,11 +551,11 @@ with tab_explorer:
                 evidence2.metric("Confirmation", f"{selected['Institutional Confirmation %']:.0f}%", selected["Confirmation Evidence"])
                 evidence3.metric("MFE / MAE", f"{selected['MFE Points'] if pd.notna(selected['MFE Points']) else '-'} / {selected['MAE Points'] if pd.notna(selected['MAE Points']) else '-'}")
                 evidence4.metric("R Multiple", f"{selected['R Multiple']:.2f}R" if pd.notna(selected["R Multiple"]) else "Pending")
-    
+
                 if selected.get("Failure Analysis"):
                     st.warning("Failure analysis: " + str(selected["Failure Analysis"]))
                 st.caption("Detection evidence: " + str(selected["Evidence"]))
-    
+
                 replay_df = historical_pattern_candles.copy() if isinstance(historical_pattern_candles, pd.DataFrame) else pd.DataFrame()
                 if not replay_df.empty:
                     if "timestamp" not in replay_df.columns and isinstance(replay_df.index, pd.DatetimeIndex):
@@ -495,13 +579,13 @@ with tab_explorer:
                     st.plotly_chart(fig, use_container_width=True)
             else:
                 st.info("No patterns match the selected filters for replay.")
-    
+
     structure_rows = structure_result.metadata.get("structures", [])
     if structure_rows:
         st.markdown("#### Institutional Structures")
         st.dataframe(pd.DataFrame(structure_rows), use_container_width=True, hide_index=True)
-    
-    
+
+
 with tab_live:
     st.markdown("## Version 7.6 — Institutional Decision Matrix & AI Trade Planner")
     with st.expander("Risk and position sizing settings", expanded=False):
@@ -512,7 +596,7 @@ with tab_live:
             planner_risk_pct = st.number_input("Maximum risk per trade (%)", min_value=0.1, max_value=5.0, value=1.0, step=0.1)
         with rc3:
             planner_lot_size = st.number_input("Option lot size", min_value=1, value=25, step=1)
-    
+
     trade_plan_result = AITradePlannerEngine().analyze({
         "recommendation": recommendation, "intelligence": intelligence,
         "decision_matrix_result": decision_matrix_result,
@@ -528,7 +612,7 @@ with tab_live:
         "trade_plan_result": trade_plan_result,
     })
     recommendation["opportunity_lifecycle_v80"] = opportunity_result.metadata
-    
+
     # Version 8.1 Historical Intelligence. Historical evidence supports the live
     # decision but can never override current validation, stability or risk gates.
     historical_long = pd.DataFrame()
@@ -561,7 +645,7 @@ with tab_live:
     recommendation["historical_similarity_v81"] = similarity_result.metadata
     recommendation["institutional_playbook_v81"] = playbook_result.metadata
     recommendation["session_report_v81"] = report_result.metadata
-    
+
     # Version 8.2 Decision Intelligence Core. All engines vote into one central
     # decision package. Critical live-risk checks retain veto authority.
     consensus_result = AIConsensusEngine().analyze({
@@ -594,15 +678,15 @@ with tab_live:
         "opportunity_result": opportunity_result, "playbook_result": playbook_result,
     })
     recommendation["decision_intelligence_v82"] = decision_package_result.metadata
-    
-    
+
+
     # Render Version 8.2 only after every Decision Intelligence result has been initialized.
     st.markdown("## Version 8.2 — Decision Intelligence Center")
     dp = decision_package_result.metadata
     cm = consensus_result.metadata
     pm = probability_result.metadata
     rm = risk_v82_result.metadata
-    
+
     d1, d2, d3, d4, d5, d6 = st.columns(6)
     d1.metric("Final Decision", dp.get("recommendation", "WAIT"), dp.get("status", "WAITING"))
     d2.metric("Decision Confidence", f"{dp.get('confidence', 0):.0f}%")
@@ -610,20 +694,20 @@ with tab_live:
     d4.metric("Consensus", f"{dp.get('consensus', 0):.0f}%")
     d5.metric("Conflict", dp.get("conflict_level", "LOW"), f"{dp.get('conflict_score', 0):.0f}%")
     d6.metric("Risk", dp.get("risk_level", "HIGH"), "VETO" if dp.get("risk_veto") else "PASS")
-    
+
     probs = pm.get("probabilities", {})
     pr1, pr2, pr3 = st.columns(3)
     pr1.metric("BUY CE Probability", f"{probs.get('BUY CE', 0):.1f}%")
     pr2.metric("BUY PE Probability", f"{probs.get('BUY PE', 0):.1f}%")
     pr3.metric("WAIT Probability", f"{probs.get('WAIT', 0):.1f}%")
-    
+
     if dp.get("risk_veto"):
         st.error("Decision blocked by critical risk controls. Final action remains WAIT.")
     elif dp.get("recommendation") != "WAIT":
         st.success(f"{dp.get('recommendation')} passed consensus and risk validation. Confirm execution manually.")
     else:
         st.warning("WAIT — evidence is incomplete, conflicting, or below the institutional threshold.")
-    
+
     left_decision, right_decision = st.columns(2)
     with left_decision:
         st.markdown("#### Engine Voting Committee")
@@ -645,7 +729,7 @@ with tab_live:
             st.markdown("#### Active Blockers")
             for blocker in dp.get("blockers", []):
                 st.write("• " + blocker)
-    
+
     plan82 = dp.get("entry", {}) or {}
     if plan82.get("contract"):
         with st.expander("Structured Decision Package", expanded=False):
@@ -662,15 +746,15 @@ with tab_live:
                 "evidence": dp.get("evidence"),
                 "blockers": dp.get("blockers"),
             })
-    
+
     with st.expander("Version 8.2 design contract", expanded=False):
         st.write("• Every intelligence engine votes into one central consensus object.")
         st.write("• Probability and confidence are displayed separately.")
         st.write("• Critical risk controls can veto any directional consensus.")
         st.write("• The decision package contains evidence, blockers, entries, targets and invalidation rules.")
         st.write("• Injection-Pinbar Bottom remains supporting Candle DNA evidence; it cannot independently create a trade.")
-    
-    
+
+
     try:
         if should_load:
             SnapshotStore().save_playbook_history(
@@ -697,7 +781,7 @@ with tab_live:
         decision_audit_history = pd.DataFrame()
         playbook_history = pd.DataFrame()
         st.warning(f"Version 8.1 history could not be updated: {exc}")
-    
+
     idm = decision_matrix_result.metadata
     idm1, idm2, idm3, idm4, idm5 = st.columns(5)
     idm1.metric("Decision", idm.get("decision", "WAIT"))
@@ -705,11 +789,11 @@ with tab_live:
     idm3.metric("Trade Quality", f"{idm.get('trade_quality', 0):.0f}/100", idm.get("grade", "-"))
     idm4.metric("Risk", idm.get("risk_level", "HIGH"))
     idm5.metric("Planner State", trade_plan_result.metadata.get("state", "WAIT"))
-    
+
     matrix_df = pd.DataFrame(idm.get("matrix", []))
     if not matrix_df.empty:
         st.dataframe(matrix_df, use_container_width=True, hide_index=True)
-    
+
     plan = trade_plan_result.metadata.get("plan")
     if plan:
         st.markdown("### AI Trade Plan")
@@ -718,19 +802,19 @@ with tab_live:
         p2.metric("Entry Zone", f"₹{plan.get('entry_low', 0):.2f} – ₹{plan.get('entry_high', 0):.2f}")
         p3.metric("Stop Loss", f"₹{plan.get('stop_loss', 0):.2f}")
         p4.metric("Position", f"{plan.get('lots', 0)} lot(s)", f"Qty {plan.get('quantity', 0)}")
-    
+
         t1, t2, t3, t4 = st.columns(4)
         t1.metric("Target 1", f"₹{plan.get('target1', 0):.2f}", "1.25R")
         t2.metric("Target 2", f"₹{plan.get('target2', 0):.2f}", "2.0R")
         t3.metric("Target 3", f"₹{plan.get('target3', 0):.2f}", "3.0R")
         t4.metric("Planned Exposure", f"₹{plan.get('exposure', 0):,.0f}", f"Risk ₹{plan.get('risk_amount', 0):,.0f}")
-    
+
         if plan.get("state") == "TRIGGERED":
             st.success("Existing safety gates and institutional confirmation support this planning setup.")
         else:
             req = plan.get("trigger_requirements", [])
             st.warning("WAITING — " + (" • ".join(req) if req else "Confirmation conditions are still developing."))
-    
+
         ranking_rows = trade_plan_result.metadata.get("rankings", [])
         if ranking_rows:
             st.markdown("#### AI Strike Selector")
@@ -739,27 +823,27 @@ with tab_live:
             for rule in plan.get("exit_rules", []):
                 st.write("• " + rule)
             st.caption("Planning levels are analytical estimates, not guaranteed fills or investment advice.")
-    
+
     st.markdown("## Version 8.0 — Core Institutional Intelligence")
     regime = regime_result.metadata
     smi = smi_result.metadata
     energy = energy_result.metadata
     opportunity = opportunity_result.metadata
-    
+
     v81, v82, v83, v84, v85 = st.columns(5)
     v81.metric("Market Regime", regime.get("regime", "Unknown"), f"{regime.get('confidence', 0):.0f}%")
     v82.metric("Regime Direction", regime.get("direction", "NEUTRAL"))
     v83.metric("Smart Money Index", f"{smi.get('smi', 0):.0f}/100", smi.get("label", "WEAK"))
     v84.metric("Market Energy", f"{energy.get('energy', 0):.0f}%", energy.get("state", "LOW"))
     v85.metric("Opportunity Stage", opportunity.get("stage", "SCANNING"), f"Next: {opportunity.get('next_stage', '—')}")
-    
+
     if opportunity.get("stage") == "READY":
         st.success(f"Opportunity READY for {opportunity.get('side', 'WAIT')} review. Existing risk and validation gates remain mandatory.")
     elif opportunity.get("stage") in {"ACCUMULATION", "VALIDATION"}:
         st.warning(f"Opportunity {opportunity.get('stage')}: {opportunity.get('probability', 0):.0f}% evidence score. Do not enter before READY.")
     else:
         st.info("Opportunity lifecycle is SCANNING. The system is waiting for stronger multi-engine alignment.")
-    
+
     core_left, core_right = st.columns(2)
     with core_left:
         st.markdown("#### Market Regime Ranking")
@@ -781,15 +865,15 @@ with tab_live:
             st.dataframe(lifecycle_df, use_container_width=True, hide_index=True)
         for requirement in opportunity.get("requirements", []):
             st.write("• " + requirement)
-    
+
     with st.expander("Version 8.0 design contract", expanded=False):
         st.write("• Market Regime answers: what type of session is active?")
         st.write("• Smart Money Index answers: how strongly are institutional signals aligned?")
         st.write("• Market Energy answers: does the market have enough force for follow-through?")
         st.write("• Opportunity Lifecycle answers: where is the setup between scanning and readiness?")
         st.write("• None of these engines can bypass the existing false-breakout, stability, flow-validation or risk gates.")
-    
-    
+
+
 with tab_explorer:
     st.markdown("## Version 8.1 — Historical Intelligence")
     similarity = similarity_result.metadata
@@ -802,9 +886,9 @@ with tab_explorer:
     hi3.metric("Sessions Scanned", int(similarity.get("sessions_scanned", 0)))
     hi4.metric("Active Playbook", playbook.get("primary", {}).get("Playbook", "Developing"), f"{playbook_result.score:.0f}%")
     hi5.metric("Session Report Grade", report.get("grade", "D"))
-    
+
     st.info(report.get("report", "Historical intelligence is warming up."))
-    
+
     hist_left, hist_right = st.columns(2)
     with hist_left:
         st.markdown("#### Historical Similarity Matches")
@@ -832,11 +916,11 @@ with tab_explorer:
             audit_view = decision_audit_history.drop(columns=["report"], errors="ignore").head(50)
             st.dataframe(audit_view, use_container_width=True, hide_index=True)
             st.download_button("Export decision audit", decision_audit_history.to_csv(index=False), "itos_v8_1_decision_audit.csv", "text/csv")
-    
+
     if not playbook_history.empty:
         with st.expander("Playbook history — last 7 days", expanded=False):
             st.dataframe(playbook_history, use_container_width=True, hide_index=True)
-    
+
     with st.expander("Version 8.1 design contract", expanded=False):
         st.write("• Historical Similarity answers: have we seen a comparable session before?")
         st.write("• Decision Audit answers: exactly what did the system know when it made the recommendation?")
@@ -844,22 +928,22 @@ with tab_explorer:
         st.write("• Market Replay answers: how did price, state and confidence evolve during the session?")
         st.write("• Session Reports translate the evidence into plain English without claiming certainty.")
         st.write("• Historical evidence is advisory and cannot override live validation, false-breakout or risk controls.")
-    
-    
+
+
 with tab_live:
     st.markdown("## Version 7.7 — Institutional Flow Engine")
     flow = flow_result.metadata
     ice = ice_result.metadata
     valid = validation_result.metadata
     early = early_warning_result.metadata
-    
+
     f1, f2, f3, f4, f5 = st.columns(5)
     f1.metric("Flow State", flow.get("flow_state", "WARMING UP"))
     f2.metric("Institutional Confidence", f"{ice.get('confidence', 0):.0f}%", ice.get("label", "WEAK"))
     f3.metric("Signal Validation", valid.get("decision", "WAIT"), f"{valid.get('passed', 0)}/{valid.get('total', 6)} controls")
     f4.metric("Early Warning", early.get("state", "NO SETUP"))
     f5.metric("Expected Trigger", early.get("estimated_trigger", "Not available"), f"{early.get('probability', 0):.0f}% probability")
-    
+
     if flow.get("snapshot_count", 0) < flow.get("minimum_snapshots", 4):
         st.info(f"Flow engine is warming up: {flow.get('snapshot_count', 0)} stored snapshot(s). Refresh until at least {flow.get('minimum_snapshots', 4)} minute snapshots are available.")
     elif valid.get("validated"):
@@ -868,7 +952,7 @@ with tab_live:
         st.warning(f"{early.get('state')} — prepare the contract, but wait for all safety controls. Estimated confirmation window: {early.get('estimated_trigger')}.")
     else:
         st.warning("Institutional evidence is mixed. The disciplined action is WAIT.")
-    
+
     flow_cols = st.columns(6)
     flow_cols[0].metric("Put Flow", f"{flow.get('put_flow_score', 0):.0f}/100")
     flow_cols[1].metric("Call Flow", f"{flow.get('call_flow_score', 0):.0f}/100")
@@ -876,7 +960,7 @@ with tab_live:
     flow_cols[3].metric("OI Momentum", f"{flow.get('oi_momentum', 0):+,.0f}")
     flow_cols[4].metric("OI Acceleration", f"{flow.get('oi_acceleration', 0):+,.1f}")
     flow_cols[5].metric("IV Expansion", f"{flow.get('iv_expansion', 0):+.3f}")
-    
+
     left_flow, right_flow = st.columns(2)
     with left_flow:
         st.markdown("#### Institutional Confidence Contributions")
@@ -901,28 +985,28 @@ with tab_live:
         wall = flow.get("gamma_wall")
         if wall:
             st.metric("Gamma Wall", f"{wall.get('strike', 0):.0f}", f"Strength {wall.get('strength', 0):.0f}/100")
-    
+
     st.markdown("#### Institutional Timeline")
     timeline_df = pd.DataFrame(flow.get("timeline", []))
     if not timeline_df.empty:
         st.dataframe(timeline_df, use_container_width=True, hide_index=True)
     else:
         st.info("Timeline needs multiple stored snapshots. Keep SQLite snapshot storage enabled and refresh during market hours.")
-    
+
     with st.expander("How Version 7.7 protects against false confidence", expanded=False):
         st.write("• Flow scores measure change and acceleration, not only static OI.")
         st.write("• ICE combines flow with price, VWAP, volume, patterns, cycle and institutional confirmation.")
         st.write("• Early warnings are preparation alerts—not BUY instructions.")
         st.write("• BUY remains blocked until the signal-validation controls pass and previous safety gates remain healthy.")
         st.caption("This platform is analytical decision support. Options trading carries substantial risk; validate with paper trading before live use.")
-    
+
     st.markdown("#### Institutional Radar")
     rad1, rad2, rad3, rad4 = st.columns(4)
     rad1.metric("Buying Pressure", f"{radar_result.metadata.get('buying_pressure', 0):.0f}/100")
     rad2.metric("Selling Pressure", f"{radar_result.metadata.get('selling_pressure', 0):.0f}/100")
     rad3.metric("Call Writing", f"{radar_result.metadata.get('call_writing', 0):.0f}/100")
     rad4.metric("Put Writing", f"{radar_result.metadata.get('put_writing', 0):.0f}/100")
-    
+
     st.markdown("#### Institutional Checklist")
     check_df = pd.DataFrame(readiness_result.metadata.get("checks", []))
     if not check_df.empty:
@@ -934,7 +1018,7 @@ with tab_live:
         st.warning("Waiting for: " + " • ".join(readiness_result.metadata["missing"]))
     else:
         st.success("All Version 7.1 institutional readiness controls are healthy.")
-    
+
     st.markdown("#### Pattern Recognition")
     primary_pattern = pattern_result.metadata.get("primary_pattern", {})
     pat1, pat2, pat3 = st.columns(3)
@@ -945,7 +1029,7 @@ with tab_live:
     if pattern_rows:
         with st.expander("View detected and conflicting patterns", expanded=False):
             st.dataframe(pd.DataFrame(pattern_rows), use_container_width=True, hide_index=True)
-    
+
     headline, probability = st.columns([2, 1])
     with headline:
         st.subheader(f"{state_icon(intelligence['state'])} {intelligence['state']}")
@@ -959,14 +1043,14 @@ with tab_live:
         q1.metric("Bullish probability", f"{intelligence['bullish_probability']:.0f}%")
         q2.metric("Bearish probability", f"{intelligence['bearish_probability']:.0f}%")
         st.metric("Base model confidence", f"{intelligence['confidence']:.0f}%")
-    
+
     st.subheader("Institutional Market Cycle & Recommendation Stability")
     cycle1, cycle2, cycle3, cycle4 = st.columns(4)
     cycle1.metric("Current phase", cycle_meta.get("phase", "Unknown"))
     cycle2.metric("Phase confidence", f"{cycle_meta.get('phase_confidence', 0):.1f}%")
     cycle3.metric("Manipulation score", f"{cycle_meta.get('manipulation_score', 0):.1f}/100")
     cycle4.metric("Cycle vote", cycle_result.vote)
-    
+
     stable1, stable2, stable3, stable4 = st.columns(4)
     stable1.metric("Stability score", f"{stability_meta.get('stability_score', 0):.1f}/100")
     stable2.metric("Stability label", stability_meta.get("label", "Unknown"))
@@ -1418,11 +1502,11 @@ with tab_live:
             quality_flags = getattr(institutional_metrics, "quality_flags", ())
             if quality_flags:
                 st.caption("Quality flags: " + ", ".join(quality_flags))
-    
+
     phase_probabilities = cycle_meta.get("probabilities", {})
     if phase_probabilities:
         st.markdown("#### Market Phase Detectors")
-    
+
         # Display every phase detector explicitly so users can see which engines are
         # active instead of only seeing the winning/current phase.
         detector_specs = [
@@ -1435,7 +1519,7 @@ with tab_live:
         ]
         winning_phase = cycle_meta.get("phase", "Unknown")
         detector_threshold = 20.0
-    
+
         for row_start in range(0, len(detector_specs), 3):
             detector_columns = st.columns(3)
             for column, (label, phase_name, directional_vote) in zip(
@@ -1445,7 +1529,7 @@ with tab_live:
                 is_primary = winning_phase == phase_name
                 is_active = is_primary or detector_score >= detector_threshold
                 detector_status = "PRIMARY" if is_primary else ("ACTIVE" if is_active else "INACTIVE")
-    
+
                 with column:
                     st.metric(label, f"{detector_score:.1f}%", detector_status)
                     if phase_name == "Manipulation":
@@ -1460,7 +1544,7 @@ with tab_live:
                         st.caption("Can veto CE/PE entries when manipulation risk is high.")
                     else:
                         st.caption(f"Directional bias: {directional_vote}")
-    
+
         probability_view = pd.DataFrame({
             "Detector": list(phase_probabilities),
             "Probability %": list(phase_probabilities.values()),
@@ -1475,7 +1559,7 @@ with tab_live:
                 use_container_width=True,
                 hide_index=True,
             )
-    
+
     with st.expander("Why the cycle and stability engines reached this view", expanded=False):
         cwhy, swhy = st.columns(2)
         with cwhy:
@@ -1486,7 +1570,7 @@ with tab_live:
             st.markdown("**Recommendation Stability Engine**")
             for item in stability_result.explanation:
                 st.write(f"• {item}")
-    
+
     if not phase_history.empty or not stability_history.empty:
         hist1, hist2 = st.columns(2)
         with hist1:
@@ -1500,7 +1584,7 @@ with tab_live:
                 st.markdown("**Stability trend**")
                 stability_chart = stability_history.set_index("captured_at")[["stability_score"]]
                 st.line_chart(stability_chart, use_container_width=True)
-    
+
     st.subheader("CE / PE Decision Engine")
     status = recommendation["status"]
     if status.startswith("BUY SETUP CONFIRMED"):
@@ -1509,29 +1593,29 @@ with tab_live:
         st.warning(f"### {status}")
     else:
         st.error(f"### {status}")
-    
+
     d1, d2, d3, d4 = st.columns(4)
     d1.metric("Direction", recommendation["direction"])
     d2.metric("Model setup score", f"{recommendation['model_probability']:.0f}%")
     d3.metric("Market regime", recommendation["regime"]["name"])
     d4.metric("Relative volume", f"{recommendation['regime']['relative_volume']:.2f}×")
-    
+
     st.markdown("#### Trade Readiness & Explainable Confidence")
     ready1, ready2, ready3, ready4 = st.columns(4)
     ready1.metric("Calibrated confidence", f"{recommendation['confidence']:.0f}%", recommendation['confidence_detail']['label'])
     ready2.metric("Trade quality", f"{recommendation['trade_quality']:.0f}/100")
     ready3.metric("Health score", f"{recommendation['health_score']:.0f}/100")
     ready4.metric("Lifecycle", "TRIGGERED" if recommendation["confirmed"] else ("READY / WATCH" if recommendation["passed_conditions"] >= recommendation["total_conditions"] - 1 else "WAITING"))
-    
+
     confidence_detail = recommendation["confidence_detail"]
-    
+
     st.markdown("#### Confidence Hierarchy")
     h1, h2, h3, h4 = st.columns(4)
     h1.metric("Market confidence", f"{confidence_detail['market_confidence']:.0f}%")
     h2.metric(f"{recommendation['side']} direction confidence", f"{confidence_detail['direction_confidence']:.0f}%")
     h3.metric("Trigger confidence", f"{confidence_detail['trigger_confidence']:.0f}%")
     h4.metric("Config version", confidence_detail.get("config_version", "unknown"))
-    
+
     consensus = confidence_detail.get("consensus", {})
     st.markdown(f"#### AI Consensus — {consensus.get('agreeing', 0)} of {consensus.get('total', 0)} engines agree")
     consensus_df = pd.DataFrame(consensus.get("engines", []))
@@ -1540,7 +1624,7 @@ with tab_live:
         consensus_view = consensus_df[["engine", "vote", "score", "Status"]].copy()
         consensus_view.columns = ["Engine", "Vote", "Score", "Status"]
         st.dataframe(consensus_view.style.format({"Score": "{:.1f}"}), use_container_width=True, hide_index=True)
-    
+
     if not confidence_history.empty:
         st.markdown("#### Confidence Trend")
         chart_df = confidence_history.set_index("captured_at")[["market_confidence", "direction_confidence", "trigger_confidence", "calibrated_confidence"]]
@@ -1551,7 +1635,7 @@ with tab_live:
             latest_delta = float(confidence_history.iloc[-1]["calibrated_confidence"] - confidence_history.iloc[-2]["calibrated_confidence"])
         trend_word = "building" if latest_delta > 1 else "fading" if latest_delta < -1 else "stable"
         st.caption(f"Latest confidence is {trend_word}: {latest_delta:+.1f} points since the previous stored refresh.")
-    
+
     st.caption(
         f"Confidence range: {confidence_detail['lower_bound']:.0f}%–{confidence_detail['upper_bound']:.0f}% • "
         f"Method: {confidence_detail['method']} • Active cap: {confidence_detail['cap']:.0f}%"
@@ -1582,14 +1666,14 @@ with tab_live:
                     st.write(f"⚠️ {item}")
             else:
                 st.write("No confidence deduction is active.")
-    
+
     progress_value = recommendation["passed_conditions"] / max(recommendation["total_conditions"], 1)
     st.progress(progress_value, text=f"Trigger countdown: {recommendation['passed_conditions']} of {recommendation['total_conditions']} conditions complete")
-    
+
     component_cols = st.columns(len(recommendation["component_scores"]))
     for idx, (name, value) in enumerate(recommendation["component_scores"].items()):
         component_cols[idx].metric(name, f"{value:.0f}")
-    
+
     check_left, check_right = st.columns(2)
     with check_left:
         st.markdown("**Trigger checklist**")
@@ -1603,7 +1687,7 @@ with tab_live:
                 st.write(f"• {item}")
         else:
             st.success("Nothing missing. The setup has passed all trigger conditions.")
-    
+
     best = recommendation.get("best")
     if best:
         st.markdown(f"#### Best-ranked contract: **{best['contract']}**")
@@ -1617,7 +1701,7 @@ with tab_live:
             f"Delta {best['delta']:.2f} • Spread {best['spread_pct']:.2f}% • "
             f"Volume {compact_number(best['volume'])} • OI {compact_number(best['oi'])}"
         )
-    
+
     explain_left, explain_right = st.columns(2)
     with explain_left:
         st.markdown("**Confirmation evidence**")
@@ -1630,13 +1714,13 @@ with tab_live:
                 st.write(f"• {blocker}")
         else:
             st.write("• No active blocker passed to the decision layer.")
-    
+
     def show_top_trade_table(title: str, trades: pd.DataFrame) -> None:
         st.markdown(f"#### {title}")
         if trades.empty:
             st.info("No contract currently passes the liquidity, spread and delta filters.")
             return
-    
+
         view = trades[[
             "trade_state", "strike", "premium", "entry_trigger", "stop_loss",
             "target1", "target2", "candidate_confidence", "confidence_band", "final_score", "flow_score", "liquidity_score",
@@ -1647,11 +1731,11 @@ with tab_live:
             "Target 1", "Target 2", "Confidence", "Confidence Band", "Score", "Flow", "Liquidity",
             "Spread %", "Abs Delta", "Volume", "OI", "OI Change"
         ]
-    
+
         def color_trade_state(row: pd.Series) -> list[str]:
             background = "background-color: #d1fae5; color: #065f46; font-weight: 700;" if row["Status"] == "TRIGGERED" else "background-color: #fef3c7; color: #92400e; font-weight: 700;"
             return [background] * len(row)
-    
+
         formatted = view.style.apply(color_trade_state, axis=1).format({
             "Strike": "{:.0f}",
             "LTP": "₹{:.2f}",
@@ -1670,15 +1754,15 @@ with tab_live:
             "OI Change": "{:,.0f}",
         })
         st.dataframe(formatted, use_container_width=True, hide_index=True)
-    
+
     st.markdown("### Top 5 CE and PE Trade Candidates")
     st.caption("Green = setup triggered by the decision engine. Yellow = candidate is ranked but confirmation is still pending.")
     show_top_trade_table("Top 5 CE Trades", recommendation["ce_top5"])
     st.divider()
     show_top_trade_table("Top 5 PE Trades", recommendation["pe_top5"])
-    
+
     st.caption(recommendation["note"])
-    
+
     st.markdown("### Live Trade Lifecycle")
     active_lifecycle = trade_history[trade_history["status"] == "ACTIVE"].copy() if not trade_history.empty else pd.DataFrame()
     if active_lifecycle.empty:
@@ -1688,14 +1772,14 @@ with tab_live:
         lifecycle_view = active_lifecycle[["contract", "opened_at", "entry_price", "current_ltp", "stop_loss", "target1", "target2", "Progress to T1 %"]].copy()
         lifecycle_view.columns = ["Contract", "Triggered At", "Entry", "Current", "Stop-Loss", "Target 1", "Target 2", "Progress to T1 %"]
         st.dataframe(lifecycle_view, use_container_width=True, hide_index=True)
-    
+
 with tab_explorer:
     st.markdown("### Historical Trade Tracker")
     st.caption(
         "Yellow = active trade, green = completed successfully at Target 1, "
         "red = completed after stop-loss. Outcomes use the latest LTP observed at each refresh."
     )
-    
+
     stat_cols = st.columns(8)
     stat_cols[0].metric("Total triggered", int(trade_stats["total"]))
     stat_cols[1].metric("Active", int(trade_stats["active"]))
@@ -1705,7 +1789,7 @@ with tab_explorer:
     stat_cols[5].metric("Avg winner", f"{trade_stats['avg_winner']:+.1f}%")
     stat_cols[6].metric("Avg loser", f"{trade_stats['avg_loser']:+.1f}%")
     stat_cols[7].metric("Profit factor", f"{trade_stats['profit_factor']:.2f}")
-    
+
     if trade_history.empty:
         st.info("No triggered trades have been recorded yet. A trade will be added automatically when a candidate turns green.")
     else:
@@ -1731,7 +1815,7 @@ with tab_explorer:
             "Best LTP", "Lowest LTP", "P&L Points", "P&L %",
             "Signal Score", "Confidence", "Market Regime", "Trade Quality", "Health Score", "Completion Reason"
         ]
-    
+
         def color_history_row(row: pd.Series) -> list[str]:
             if row["Result"] == "SUCCESS":
                 css = "background-color: #d1fae5; color: #065f46; font-weight: 700;"
@@ -1740,7 +1824,7 @@ with tab_explorer:
             else:
                 css = "background-color: #fef3c7; color: #92400e; font-weight: 700;"
             return [css] * len(row)
-    
+
         history_styled = history_view.style.apply(color_history_row, axis=1).format({
             "Triggered At": lambda value: value.strftime("%d-%b %H:%M:%S") if pd.notna(value) else "—",
             "Completed At": lambda value: value.strftime("%d-%b %H:%M:%S") if pd.notna(value) else "—",
@@ -1759,7 +1843,7 @@ with tab_explorer:
             "Health Score": lambda value: f"{value:.0f}/100" if pd.notna(value) else "—",
         })
         st.dataframe(history_styled, use_container_width=True, hide_index=True)
-    
+
         csv_data = history_view.to_csv(index=False).encode("utf-8")
         st.download_button(
             "Download trade history CSV",
@@ -1770,7 +1854,7 @@ with tab_explorer:
             ),
             mime="text/csv",
         )
-    
+
 with tab_live:
     row1 = st.columns(5)
     row1[0].metric("Spot", f"{s['spot']:,.2f}")
@@ -1778,7 +1862,7 @@ with tab_live:
     row1[2].metric("PCR (OI)", f"{s['pcr_oi']:.2f}")
     row1[3].metric("PCR (Volume)", f"{s['pcr_volume']:.2f}")
     row1[4].metric("Combined score", f"{intelligence['score']:+.2f}")
-    
+
     fig = make_market_chart(
         p["candles"],
         support=s["support"],
@@ -1790,7 +1874,7 @@ with tab_live:
         ),
     )
     st.plotly_chart(fig, use_container_width=True)
-    
+
     left, right = st.columns([1, 1])
     with left:
         st.subheader("Why the engine reached this view")
@@ -1808,7 +1892,7 @@ with tab_live:
                 st.warning(flag)
         else:
             st.info("No major model risk flag is active at the current snapshot.")
-    
+
     st.subheader("OI activity summary")
     a1, a2, a3, a4, a5, a6 = st.columns(6)
     a1.metric("CE ΔOI", compact_number(s["call_oi_change"]))
@@ -1817,7 +1901,7 @@ with tab_live:
     a4.metric("Put-writing strikes", s["put_writing"])
     a5.metric("CE short-covering", s["call_short_covering"])
     a6.metric("PE short-covering", s["put_short_covering"])
-    
+
 with tab_explorer:
     st.subheader("Institutional flow memory")
     if save_snapshots:
@@ -1833,7 +1917,7 @@ with tab_explorer:
             hours=history_hours,
         )
         institutional = institutional_summary(history, strike_history)
-    
+
         h1, h2, h3 = st.columns(3)
         h1.metric(
             "Stored snapshots",
@@ -1844,13 +1928,13 @@ with tab_explorer:
         )
         h2.metric("Institutional flow", institutional["primary_label"])
         h3.metric("Flow strength", f"{institutional['primary_strength']:+.0f}")
-    
+
         if st.session_state.get("snapshot_created") is False:
             st.info("The current minute was refreshed in SQLite rather than duplicated.")
-    
+
         for sentence in institutional["narrative"]:
             st.write(f"• {sentence}")
-    
+
         windows = institutional["windows"]
         if windows:
             window_rows = []
@@ -1869,7 +1953,7 @@ with tab_explorer:
             st.dataframe(window_rows, use_container_width=True, hide_index=True)
         else:
             st.warning("Only one snapshot is available. Keep auto-refresh enabled to build 5/15/30/60-minute comparisons.")
-    
+
         if len(history) >= 2:
             hc1, hc2 = st.columns(2)
             with hc1:
@@ -1890,10 +1974,10 @@ with tab_explorer:
                     line_chart(history, ["atm_iv", "iv_skew"], "ATM IV and IV skew", "IV"),
                     use_container_width=True,
                 )
-    
+
             heatmap_side = st.radio("OI heatmap", ["net", "call", "put"], horizontal=True)
             st.plotly_chart(strike_heatmap(strike_history, heatmap_side), use_container_width=True)
-    
+
             strike_flows = institutional["strike_flows"]
             if not strike_flows.empty:
                 st.subheader("Strongest 15-minute strike flows")
@@ -1909,7 +1993,7 @@ with tab_explorer:
                 st.dataframe(flow_view, use_container_width=True, hide_index=True)
     else:
         st.info("SQLite snapshot storage is disabled for this run.")
-    
+
     st.subheader("Option chain near ATM")
     view_cols = [
         "call_activity", "call_oi_change", "call_oi", "call_volume", "call_iv",
@@ -1932,7 +2016,7 @@ with tab_explorer:
         "PE IV": "{:.2f}",
     }
     st.dataframe(view.style.format(numeric_format), use_container_width=True, hide_index=True)
-    
+
     c1, c2 = st.columns(2)
     with c1:
         st.subheader("Open-interest walls")
@@ -1944,7 +2028,7 @@ with tab_explorer:
         temp = df.set_index("strike")[["call_oi_change", "put_oi_change"]]
         temp.columns = ["Call ΔOI", "Put ΔOI"]
         st.bar_chart(temp)
-    
+
     st.markdown("## ❓ Are the data feeds healthy?")
     st.caption("Data Health")
     dh1, dh2, dh3, dh4 = st.columns(4)
@@ -1964,10 +2048,10 @@ with tab_explorer:
         st.markdown(
             """
     The engine combines two independent groups of evidence:
-    
+
     1. **Option-chain intelligence:** PCR, call/put OI additions, OI walls, volume PCR, IV skew and buildup classification.
     2. **Underlying confirmation:** EMA 9/21 alignment, VWAP position, recent momentum, ATR and RSI.
-    
+
     The option-chain score receives 58% weight and price confirmation receives 42%. Version 4 stores one strike-level snapshot per minute in SQLite and compares market changes over 5, 15, 30 and 60 minutes. Version 5 adds relative-volume checks, market-regime detection, strike liquidity/delta/spread ranking and rule-based entry/exit planning. Institutional activity is inferred from changes in spot, OI and option premiums; it does not identify actual institutions. The probability values are model scores, not statistically guaranteed win rates.
     """
         )

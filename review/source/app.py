@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 import time
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from urllib.parse import urlencode
 
 import pandas as pd
@@ -59,7 +59,7 @@ from dashboard_application_service import (
     DashboardDataUnavailable,
 )
 from itos_platform.replay import (
-    DataMode, SampleDataProvider, build_upstox_historical_replay_provider,
+    DataMode, HistoricalReplayProvider, SampleDataProvider, build_upstox_historical_replay_provider,
 )
 from itos_platform.replay_ux import change_data_mode, initialize_replay_state
 from ui.replay_workspace import render_replay_workspace
@@ -68,6 +68,11 @@ from ui.historical_similarity_workspace import render_historical_similarity_work
 from itos_platform.historical_analytics import WorkspaceMode
 from itos_platform.historical_sync import HistoricalSyncManager, UpstoxHistoricalSyncProvider
 from itos_platform.market_lake import LocalHistoricalMarketLake
+from itos_platform.historical_pipeline import compose_historical_pipeline
+from ui.historical_analytics_workspace import MarketLakeActions
+from itos_platform.market_lake import serialize_dashboard_result
+from itos_platform.historical_intelligence_index import build_fingerprint
+from itos_platform.replay import ReplayRequest
 
 load_dotenv()
 st.set_page_config(
@@ -152,20 +157,71 @@ st.caption(
 )
 token = auth()
 authenticated_client = UpstoxClient(token) if token else None
+historical_pipeline = compose_historical_pipeline(authenticated_client)
 initialize_replay_state(st.session_state)
+workspace_modes = (*tuple(WorkspaceMode), "HISTORICAL_SIMILARITY")
+requested_workspace = st.session_state.pop("historical_pipeline_requested_workspace", None)
+requested_index = next((i for i, value in enumerate(workspace_modes)
+                        if value == requested_workspace or getattr(value, "value", None) == requested_workspace), 0)
 workspace_mode = st.sidebar.selectbox(
-    "Top Level Mode", (*tuple(WorkspaceMode), "HISTORICAL_SIMILARITY"),
+    "Top Level Mode", workspace_modes, index=requested_index,
     format_func=lambda mode: (mode.value if isinstance(mode, WorkspaceMode) else mode).replace("_", " "),
 )
 if workspace_mode is WorkspaceMode.HISTORICAL_ANALYTICS:
-    historical_lake = LocalHistoricalMarketLake()
-    historical_provider = (UpstoxHistoricalSyncProvider(client=authenticated_client)
-                           if authenticated_client is not None else None)
-    render_historical_analytics_workspace(UNDERLYINGS, lake=historical_lake,
-        sync_manager=HistoricalSyncManager(provider=historical_provider, market_lake=historical_lake))
+    def open_similarity(trade_id):
+        st.session_state["historical_similarity_source_trade_id"] = trade_id
+        st.session_state["historical_similarity_source_mode"] = "Selected Historical Trade"
+        st.session_state["historical_pipeline_requested_workspace"] = "HISTORICAL_SIMILARITY"
+        st.rerun()
+    def pipeline_status(request):
+        records = historical_pipeline.intelligence_records(request)
+        status = historical_pipeline.index.get_status(records)
+        manifest = historical_pipeline.lake.get_manifest("upstox", request.instrument_key, request.interval_minutes)
+        raw = len(manifest.available_dates) if manifest else 0
+        outcomes = len(manifest.outcome_dates) if manifest else 0
+        options = len(manifest.option_dates) if manifest else 0
+        next_action = ("Download raw data" if not raw else "Build intelligence" if not records
+                       else "Build outcomes" if not outcomes else "Build missing index" if status.missing_index_records
+                       else "Index is ready")
+        return {"Raw Data": f"{raw} session(s)", "Historical Options": f"{options} session(s)",
+                "Intelligence": f"{len(records)} record(s)", "Outcomes": f"{outcomes} session(s)",
+                "Index": f"{status.total_indexed_records} indexed / {status.missing_index_records} missing / {status.outdated_fingerprint_records} outdated / {status.invalid_records} invalid",
+                "Similarity": "index ready" if status.total_indexed_records else "index not ready",
+                "Index path": str(historical_pipeline.index.settings.historical_index_path),
+                "Recommended Next Action": next_action}
+    actions = MarketLakeActions(
+        build_intelligence=lambda request: historical_pipeline.build_intelligence(request),
+        build_outcomes=historical_pipeline.build_outcomes,
+        build_index=historical_pipeline.build_index,
+        validate_index=historical_pipeline.validate_index,
+        rebuild_outdated=lambda request: historical_pipeline.build_index(request, rebuild_outdated=True),
+        finalize_today=lambda request: historical_pipeline.finalization.finalize(
+            request.instrument_key, request.interval_minutes, date.today(),
+            historical_pipeline.lake.settings.engine_version),
+        download_options=(None if historical_pipeline.option_service is None else
+            lambda request: historical_pipeline.option_service.download(
+                request.instrument_key, request.start_date, request.end_date)),
+        index_status=pipeline_status,
+    )
+    render_historical_analytics_workspace(UNDERLYINGS, lake=historical_pipeline.lake,
+        actions=actions, sync_manager=historical_pipeline.sync_manager,
+        open_similarity=open_similarity)
     st.stop()
 if workspace_mode == "HISTORICAL_SIMILARITY":
-    render_historical_similarity_workspace()
+    def open_trade_review(trade_id=None):
+        if trade_id:
+            st.session_state["historical_trade_review_selected_trade_id"] = trade_id
+        st.session_state["historical_pipeline_requested_workspace"] = WorkspaceMode.HISTORICAL_ANALYTICS.value
+        st.rerun()
+    def open_similarity_replay(trade_id, timestamp):
+        st.session_state["historical_similarity_replay_trade_id"] = trade_id
+        st.session_state["historical_similarity_replay_target"] = timestamp
+        st.session_state["historical_similarity_return_available"] = True
+        st.session_state["historical_pipeline_requested_workspace"] = WorkspaceMode.HISTORICAL_REPLAY.value
+        st.rerun()
+    render_historical_similarity_workspace(historical_pipeline.index,
+        open_trade_review=open_trade_review, open_replay=open_similarity_replay,
+        back_to_trade_review=open_trade_review)
     st.stop()
 selected_mode = {
     WorkspaceMode.LIVE: DataMode.LIVE,
@@ -180,6 +236,11 @@ if selected_mode is not DataMode.LIVE and workspace == "Historical Replay":
     def replay_provider_factory(mode: DataMode):
         if mode is DataMode.SAMPLE_DATA:
             return SampleDataProvider()
+        if st.session_state.get("historical_similarity_return_available"):
+            return HistoricalReplayProvider(
+                lambda request: historical_pipeline.lake.load_raw_candles(
+                    "upstox", request.instrument_key, request.interval_minutes,
+                    request.trading_date), candle_source="market_lake")
         return build_upstox_historical_replay_provider(authenticated_client)
     render_replay_workspace(selected_mode, st.session_state, replay_provider_factory, UNDERLYINGS)
     st.stop()
@@ -286,6 +347,29 @@ if dashboard_result is None:
 if dashboard_result.values.get("data_unavailable"):
     st.warning(dashboard_result.warning)
     st.stop()
+
+# Capture the exact already-computed Live result. Persistence is advisory and
+# failure-isolated; it never changes or reruns the recommendation pipeline.
+if should_load:
+    try:
+        live_candles = dashboard_result.market_snapshot.historical_candles
+        last = live_candles.iloc[-1] if isinstance(live_candles, pd.DataFrame) and not live_candles.empty else None
+        stamp = pd.Timestamp(last["timestamp"] if last is not None else datetime.now()).to_pydatetime()
+        request = ReplayRequest(underlying, UNDERLYINGS[underlying], stamp.date(), stamp, timeframe,
+                                requested_option_snapshot=bool(dashboard_result.values.get("option_result")))
+        frozen_record = serialize_dashboard_result(dashboard_result, request, "upstox",
+                                                    historical_pipeline.lake.settings)
+        st.session_state["historical_similarity_live_fingerprint"] = build_fingerprint(
+            frozen_record, historical_pipeline.index.settings)
+        raw = last.to_dict() if last is not None else {"spot": dashboard_result.values.get("intelligence", {}).get("price")}
+        option_frame = dashboard_result.values.get("option_result", {}).get("chain")
+        option_records = option_frame.to_dict("records") if isinstance(option_frame, pd.DataFrame) else ()
+        captured = historical_pipeline.live_capture.capture(
+            instrument_key=UNDERLYINGS[underlying], interval=timeframe, timestamp=stamp,
+            raw_snapshot=raw, intelligence=frozen_record, option_records=option_records)
+        st.session_state["live_capture_status"] = "STORED" if captured else "SKIPPED"
+    except Exception:
+        st.session_state["live_capture_status"] = "FAILED_SAFE"
 
 # Preserve the variable names consumed by the unchanged presentation layer.
 globals().update(dashboard_result.values)
