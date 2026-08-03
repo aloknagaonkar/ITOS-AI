@@ -185,3 +185,7 @@
 
 ## Sprint 18.4F.1 — Historical Pipeline Integration
 - Added shared historical application composition, explicit build/index/finalization/option actions, pipeline status, point-in-time runner, and hardened SQLite diagnostics.
+
+## Sprint 18.4F.2
+- Added a one-click Historical Analysis request, automatic intelligence pipeline, unified progress/date coverage, stable checkpointed run IDs, cancellation semantics, and automatic results.
+- Moved technical controls behind a collapsed developer expander; preserved all analytical formulas and storage boundaries.
