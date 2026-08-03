@@ -176,3 +176,9 @@
 - Added a transactional indexed SQLite store, safe filtering/pagination, incremental build/checkpoints, generation-aware statistics cache, and preliminary relationship graph.
 - Preserved Market Lake files, outcome separation, replay no-look-ahead, CE/PE/WAIT decisions, dashboards, and all analytical formulas.
 - Hardened Sprint 18.4E nested/legacy field extraction, collision rejection, nondestructive validation/status, complete paginated statistics, symmetric neighbor retrieval, controlled version rebuild/resume, transactional rollback, and failure-isolated auto-update hooks.
+
+## Sprint 18.4F — Similarity & Pattern Discovery
+- Added deterministic, versioned semantic, numeric, and frozen-context similarity over the SQLite historical intelligence index.
+- Added traceable differences, post-score factual outcomes, explicit opposite groups, diversity controls, and deterministic pattern discovery.
+- Added an advisory Historical Similarity Streamlit workspace with readable tables, navigation targets, and CSV/JSON/optional Parquet exports.
+- Preserved all recommendation, confidence, validation, ranking, safety, replay, and execution behavior.
