@@ -190,7 +190,8 @@ if workspace_mode is WorkspaceMode.HISTORICAL_ANALYTICS:
                 "Index path": str(historical_pipeline.index.settings.historical_index_path),
                 "Recommended Next Action": next_action}
     actions = MarketLakeActions(
-        build_intelligence=lambda request: historical_pipeline.build_intelligence(request),
+        build_intelligence=lambda request, cadence_minutes=5: historical_pipeline.build_intelligence(
+            request, cadence_minutes=cadence_minutes),
         build_outcomes=historical_pipeline.build_outcomes,
         build_index=historical_pipeline.build_index,
         validate_index=historical_pipeline.validate_index,

@@ -25,6 +25,10 @@ from itos_platform.historical_trade_review import (
     filter_trade_reviews, trade_table_rows,
 )
 from itos_platform.historical_intelligence_index import make_trade_id
+from itos_platform.historical_analysis_orchestrator import (
+    HistoricalAnalysisOrchestrator, HistoricalAnalysisRunRequest,
+    HistoricalAnalysisSettings, HistoricalPipelineProgress, JsonRunCheckpointStore,
+)
 
 PREFIX = "historical_analytics_"
 TRADE_PREFIX = "historical_trade_review_"
@@ -141,6 +145,58 @@ def render_sync_progress(progress: object) -> None:
     row[3].metric("Current chunk", f"{chunk_number}/{chunk_count}" if chunk_count else "—")
     notes = [*(values.get("quality_flags") or ()), *(values.get("explanations") or ())]
     if notes: st.dataframe(pd.DataFrame({"Status detail": notes}), hide_index=True, use_container_width=True)
+
+
+def render_pipeline_progress(progress: HistoricalPipelineProgress) -> None:
+    """Render only explicit immutable fields (never raw/custom-object output)."""
+    st.subheader("Historical Analysis Progress")
+    st.progress(progress.overall_percent / 100.0, text=f"Overall Progress: {progress.overall_percent:.1f}%")
+    metrics = st.columns(4)
+    metrics[0].metric("Current Stage", progress.stage.replace("_", " ").title())
+    metrics[1].metric("Current Date", str(progress.current_date or "—"))
+    metrics[2].metric("Status", progress.overall_status.title())
+    metrics[3].metric("Requested Dates", progress.expected_dates)
+    st.caption(progress.status_message)
+    st.dataframe(pd.DataFrame(pipeline_stage_rows(progress)), hide_index=True,
+        use_container_width=True)
+    st.dataframe(pd.DataFrame([{
+        "Date": row.trading_date, "Trading Session Status": row.session.replace("_", " ").title(),
+        "Underlying Data": row.underlying, "Historical Options": row.options,
+        "Intelligence": row.intelligence, "Outcomes": row.outcomes, "Index": row.index,
+        "Final Status": row.final, "Action / Explanation": row.explanation,
+    } for row in progress.date_statuses]), hide_index=True, use_container_width=True)
+
+
+def pipeline_progress_view(progress: HistoricalPipelineProgress) -> Mapping[str, object]:
+    """Pure view model used by Streamlit and behavioural rendering tests."""
+    return {"percent": progress.overall_percent, "stage": progress.stage,
+        "message": progress.status_message, "dates": tuple({"Date": row.trading_date,
+        "Final Status": row.final, "Underlying Data": row.underlying,
+        "Historical Options": row.options, "Intelligence": row.intelligence,
+        "Outcomes": row.outcomes, "Index": row.index} for row in progress.date_statuses)}
+
+
+def pipeline_stage_rows(progress: HistoricalPipelineProgress) -> tuple[Mapping[str, object], ...]:
+    values = (
+        ("Underlying data", progress.underlying_complete, progress.underlying_total),
+        ("Historical options", progress.option_complete + progress.option_partial, progress.option_total),
+        ("ITOS intelligence", progress.intelligence_complete, progress.intelligence_total),
+        ("Outcomes", progress.outcome_complete, progress.outcome_total),
+        ("Historical index", progress.index_complete, progress.index_total),
+    )
+    return tuple({"Stage": name, "Status": "Complete" if total and complete >= total else
+        "Running" if complete else "Waiting", "Completed": complete, "Total": total}
+        for name, complete, total in values)
+
+
+class PipelineProgressPresenter:
+    """Reuse one placeholder for every synchronous pipeline update."""
+    def __init__(self, placeholder, renderer=render_pipeline_progress):
+        self.placeholder, self.renderer = placeholder, renderer
+
+    def __call__(self, progress: HistoricalPipelineProgress) -> None:
+        with self.placeholder.container():
+            self.renderer(progress)
 
 
 def _render_sync_result(result: object) -> None:
@@ -260,42 +316,86 @@ def render_historical_analytics_workspace(underlyings: Mapping[str, str], *, pro
         sync_manager: HistoricalSyncManager | None = None,
         open_similarity: Callable[[str], None] | None = None) -> None:
     """Render analytics without reading or writing replay/live session keys."""
-    st.header("Historical Analytics")
+    st.header("Historical Analysis")
     lake = lake or LocalHistoricalMarketLake(); service = HistoricalAnalyticsService(lake, provider=provider)
-    row = st.columns(4)
-    underlying = row[0].selectbox("Underlying", tuple(underlyings), key=PREFIX+"underlying")
-    instrument = row[1].text_input("Instrument key", underlyings[underlying], key=PREFIX+"instrument_key")
-    period = row[2].selectbox("Period", tuple(PeriodPreset), format_func=lambda item: item.value, key=PREFIX+"period")
-    interval = row[3].selectbox("Interval", lake.settings.supported_intervals, key=PREFIX+"interval")
-    custom_start = custom_end = None
-    if period is PeriodPreset.CUSTOM:
-        dates = st.columns(2)
-        custom_start = dates[0].date_input("Custom Start Date", date.today()-timedelta(days=7), key=PREFIX+"custom_start")
-        custom_end = dates[1].date_input("Custom End Date", date.today(), key=PREFIX+"custom_end")
-    engine = st.text_input("Engine Version", lake.settings.engine_version, key=PREFIX+"engine_version") or None
-    cadence = st.selectbox("Analysis cadence", lake.settings.supported_analysis_cadences, index=2,
-        key=PREFIX+"analysis_cadence")
-    with st.expander("Historical Analytics Filters", expanded=True):
-        filters = st.columns(3)
-        recommendation = filters[0].selectbox("Recommendation filter", ("ALL", "BUY CE", "BUY PE", "WAIT"), key=PREFIX+"recommendation")
-        confidence = filters[1].slider("Confidence range", 0.0, 100.0, (0.0, 100.0), key=PREFIX+"confidence")
-        compression = filters[2].slider("Compression range", 0.0, 100.0, (0.0, 100.0), key=PREFIX+"compression")
-        positioning = _option("Positioning filter"); manipulation = _option("Manipulation filter")
-        bias = _option("Institutional bias filter"); completeness = _option("Replay completeness filter")
-    if st.button("Analyze Stored Data", type="primary", use_container_width=True, key=PREFIX+"analyze"):
+    settings = HistoricalAnalysisSettings(maximum_date_range_days=lake.settings.maximum_sync_range)
+    row = st.columns(3)
+    underlying = row[0].selectbox("Underlying", tuple(underlyings), key="historical_simple_ui_underlying")
+    start = row[1].date_input("From Date", date.today()-timedelta(days=7), key="historical_simple_ui_from_date")
+    end = row[2].date_input("To Date", date.today(), key="historical_simple_ui_to_date")
+    instrument, interval, cadence = underlyings[underlying], 1, 5
+    include_options, rebuild_intel, rebuild_outcomes, rebuild_index = True, False, False, False
+    with st.expander("Advanced Developer Controls", expanded=False):
+        instrument = st.text_input("Instrument key", instrument, key="historical_simple_ui_instrument_key")
+        advanced = st.columns(3)
+        interval = advanced[0].selectbox("Interval", lake.settings.supported_intervals, key="historical_simple_ui_interval")
+        cadence = advanced[1].selectbox("Analysis cadence", lake.settings.supported_analysis_cadences,
+            index=2, key="historical_simple_ui_cadence")
+        include_options = advanced[2].checkbox("Historical options", True, key="historical_simple_ui_options")
+        rebuild_intel = st.checkbox("Rebuild intelligence", False, key="historical_simple_ui_rebuild_intelligence")
+        rebuild_outcomes = st.checkbox("Rebuild outcomes", False, key="historical_simple_ui_rebuild_outcomes")
+        rebuild_index = st.checkbox("Rebuild index", False, key="historical_simple_ui_rebuild_index")
+    def make_orchestrator(run_request):
+        def prepare(range_request):
+            return service.analyze(HistoricalAnalyticsRequest(run_request.instrument_key,
+                run_request.underlying, run_request.start_date, run_request.end_date,
+                run_request.interval_minutes))
+        return HistoricalAnalysisOrchestrator(
+            sync_underlying=(sync_manager.sync_missing_raw if sync_manager else actions.sync_missing_data),
+            download_options=actions.download_options, build_intelligence=actions.build_intelligence,
+            build_outcomes=actions.build_outcomes, build_index=actions.build_index,
+            prepare_analytics=prepare, checkpoint_store=JsonRunCheckpointStore(lake.root / "runs"),
+            settings=settings, should_cancel=lambda: bool(
+                st.session_state.get("historical_pipeline_cancel_requested", False)))
+    if st.button("Download & Analyze", type="primary", use_container_width=True,
+                 key="historical_simple_ui_download_analyze"):
         try:
-            end = custom_end or date.today(); start, end = resolve_analytics_period(period, end, custom_start)
-            request = HistoricalAnalyticsRequest(instrument, underlying, start, end, interval, engine,
-                None if recommendation == "ALL" else recommendation, confidence[0], confidence[1],
-                compression[0], compression[1], positioning, manipulation, bias, completeness)
-            st.session_state[PREFIX+"result"] = service.analyze(request)
+            run_request = HistoricalAnalysisRunRequest(underlying, instrument, start, end, interval, cadence,
+                include_options, True, rebuild_intel, rebuild_outcomes, rebuild_index)
+            run_request.validate(settings, underlyings)
+            orchestrator = make_orchestrator(run_request)
+            st.session_state["historical_pipeline_cancel_requested"] = False
+            progress_box = st.empty()
+            presenter = PipelineProgressPresenter(progress_box)
+            def report(value):
+                st.session_state["historical_pipeline_progress_current"] = value
+                presenter(value)
+            run = orchestrator.run(run_request, progress_callback=report)
+            st.session_state["historical_pipeline_run_active"] = run
+            st.session_state["historical_pipeline_run_request"] = run_request
+            st.session_state["historical_pipeline_results_current"] = run.analytics
+            st.session_state[PREFIX+"result"] = run.analytics
         except ValueError as error: st.error(str(error))
-    end = custom_end or date.today(); start, end = resolve_analytics_period(period, end, custom_start)
+        except HistoricalAuthenticationError: st.error("Authentication required before historical data can be downloaded.")
+        except Exception: st.error("Historical Analysis could not start. Review Advanced Diagnostics.")
     manager_request = HistoricalRangeRequest(underlying, instrument, start, end, interval, include_options=False)
     _developer_panel(lake, provider, manager_request, actions, sync_manager, cadence)
+    progress = st.session_state.get("historical_pipeline_progress_current")
+    if isinstance(progress, HistoricalPipelineProgress): render_pipeline_progress(progress)
+    active_run = st.session_state.get("historical_pipeline_run_active")
+    if active_run is not None:
+        st.caption("Interactive cancellation is unavailable while this synchronous workflow is running; completed checkpoints remain resumable after an interruption.")
+        retry = st.columns(2)
+        if retry[0].button("Retry Failed Dates", key="historical_pipeline_retry_failed",
+                disabled=not progress or not progress.failed_dates):
+            saved_request = st.session_state.get("historical_pipeline_run_request")
+            if saved_request:
+                run = make_orchestrator(saved_request).retry_failed_dates(
+                    saved_request, active_run.run_id)
+                st.session_state["historical_pipeline_run_active"] = run
+                st.session_state["historical_pipeline_progress_current"] = run.progress
+                if run.analytics is not None: st.session_state[PREFIX+"result"] = run.analytics
+        if retry[1].button("Retry Index Only", key="historical_pipeline_retry_index",
+                disabled=not progress or not any(row.index == "Index Failed" for row in progress.date_statuses)):
+            saved_request = st.session_state.get("historical_pipeline_run_request")
+            if saved_request:
+                run = make_orchestrator(saved_request).retry_index_only(
+                    saved_request, active_run.run_id)
+                st.session_state["historical_pipeline_run_active"] = run
+                st.session_state["historical_pipeline_progress_current"] = run.progress
     result = st.session_state.get(PREFIX+"result")
     if not isinstance(result, HistoricalAnalyticsResult):
-        st.info("Choose a range and click **Analyze Stored Data**. No data is downloaded automatically.")
+        st.info("Choose an underlying and dates, then click **Download & Analyze**. Nothing runs before that click.")
         return
     _coverage(result)
     manifest = lake.get_manifest(provider, instrument, interval)
@@ -308,12 +408,7 @@ def render_historical_analytics_workspace(underlyings: Mapping[str, str], *, pro
         "Outcomes": "Yes" if row.outcomes else "—", "Replay Completeness": row.replay_completeness,
         "Status": row.status, "Action Required": row.action_required} for row in coverage_rows]),
         hide_index=True, use_container_width=True)
-    st.caption("Downloads and builds run only after an explicit action in Developer → Market Lake.")
-    action_columns = st.columns(4)
-    for column, label in zip(action_columns, ("Preview Download Plan", "Download Missing Underlying Data", "Download Historical Options", "Refresh Coverage")):
-        if column.button(label, key=TRADE_PREFIX+label.lower().replace(" ","_")):
-            st.session_state[PREFIX+"developer_open"] = True
-            st.info(f"{label} selected. Review the explicit plan/action in Developer → Market Lake; nothing ran automatically.")
+    st.caption("All dependent stages ran automatically after the explicit Download & Analyze action.")
     if result.explanations:
         for explanation in result.explanations: st.info(explanation)
     st.header("Historical Dashboard")
