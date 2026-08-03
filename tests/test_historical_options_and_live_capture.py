@@ -16,7 +16,7 @@ class FakeExpired:
 
 def test_expired_download_is_explicit_and_stores_partial_replay(tmp_path):
  lake=LocalHistoricalMarketLake(MarketLakeSettings(market_lake_root=tmp_path)); service=HistoricalOptionDownloadService(FakeExpired(),lake)
- result=service.download("NIFTY",date(2026,7,10),date(2026,7,10)); assert result.contracts_stored==1 and result.status=="PARTIAL_OPTION_REPLAY"
+ result=service.download("NIFTY",date(2026,7,10),date(2026,7,10)); assert result.contracts_stored==1 and result.status=="PARTIAL_OPTION_COVERAGE"
  stored=lake.load_option_snapshots("upstox","NIFTY",date(2026,7,30),date(2026,7,10)); assert stored[0]["bid"] is None and stored[0]["greeks"] is None
 
 def test_live_capture_raw_intelligence_option_idempotent_and_secret_free(tmp_path):
@@ -40,3 +40,12 @@ def test_finalization_incomplete_without_intelligence(tmp_path):
 def test_services_never_log_token(caplog,tmp_path):
  caplog.set_level(logging.DEBUG); lake=LocalHistoricalMarketLake(MarketLakeSettings(market_lake_root=tmp_path)); LiveMarketLakeCaptureService(lake).capture(instrument_key="NIFTY",interval=1,timestamp=STAMP,raw_snapshot={"spot":1,"access_token":"SECRET"},intelligence=record())
  assert "SECRET" not in caplog.text
+
+def test_historical_option_timeout_is_configured_and_non_blocking(tmp_path):
+ class TimeoutExpired(FakeExpired):
+  def get_expired_option_expiries(self,key,*,timeout):
+   assert timeout==3.5
+   raise TimeoutError("access_token=SECRET")
+ lake=LocalHistoricalMarketLake(MarketLakeSettings(market_lake_root=tmp_path))
+ result=HistoricalOptionDownloadService(TimeoutExpired(),lake,request_timeout_seconds=3.5).download("NIFTY",STAMP.date(),STAMP.date())
+ assert result.status=="OPTION_DATA_UNAVAILABLE" and result.contracts_stored==0
