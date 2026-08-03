@@ -1,10 +1,18 @@
-# Files Changed — Sprint 18.4E Hardening
+# Files Changed — Sprint 18.4F
+
+## Added
+- `itos_platform/historical_similarity.py`
+- `ui/historical_similarity_workspace.py`
+- `tests/test_historical_similarity.py`
+- `review/docs/HISTORICAL_SIMILARITY_RULES.md`
+- `review/docs/PATTERN_DISCOVERY_RULES.md`
+- `review/docs/CONTEXT_FINGERPRINT_RULES.md`
 
 ## Modified
-- `itos_platform/historical_intelligence_index.py` — nested extraction, identity collision safety, status/validation, complete statistics, symmetric graph, rebuild/resume and hooks.
-- `tests/test_historical_intelligence_index.py` — realistic nested, status, corruption, pagination, graph, versions, rollback, collision and hook tests.
-- `CHANGELOG.md` and the corresponding `review/source` copies.
-- Sprint rules, architecture, known issues, self-review, test report, and this inventory in `review/docs`.
+- `app.py`
+- `CHANGELOG.md`
+- Sprint review documentation under `review/docs/`
+- Focused modified-file copies under `review/source/`
 
-## Added / Deleted
-None in the hardening commit.
+## Deleted
+- None from production. Previous Sprint 18.4E review/source copies were replaced by the required modified-file-only Sprint 18.4F package.
