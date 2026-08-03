@@ -1,2 +1,2 @@
-# Sprint Summary — 18.4E
-Implemented an internal, additive Historical Intelligence Index: deterministic identities, decision-time fingerprints, normalized vectors, independent version registries, SQLite retrieval, incremental maintenance, cache invalidation, and an initial semantic relationship graph. Similarity/pattern discovery, execution decisions, UI work, and changes to existing analytical/trading behavior are explicitly deferred.
+# Sprint Summary
+Sprint 18.4F implements an advisory Similarity & Pattern Discovery layer over frozen Historical Intelligence Index records: request validation, indexed candidates, explainable scoring/coverage, difference analysis, outcomes attached after scoring, patterns, diversity, opposite groups, exports, and a Streamlit workspace. No decision or execution formula changed.

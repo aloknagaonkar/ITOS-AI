@@ -1,5 +1,5 @@
 # Known Issues
-- The relationship graph remains an intentionally preliminary semantic-overlap graph, not Sprint 18.4F similarity scoring.
-- Auto-update integration is exposed through failure-isolated persistence hooks; application composition must opt in using the corresponding settings.
-- Validation reports corruption and collisions but intentionally performs no implicit repair.
-- Manual UI validation remains required; no normal UI files changed.
+- Manual browser UI validation remains required.
+- Historical movement fields are unavailable in the current compact SQLite index row and therefore remain `None`; the service never fabricates them.
+- Parquet export is available only when a supported pandas parquet engine is installed.
+- Live/replay sources require a frozen indexed Historical Trade ID in the v1 workspace; absence is non-blocking and diagnostic.

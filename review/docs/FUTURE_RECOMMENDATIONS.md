@@ -1,2 +1,2 @@
 # Future Recommendations
-Add a lightweight Parquet backend, approved exchange calendar adapter, cancellation token, manifest history/repair command, and background job progress transport. Build period aggregates only in Sprint 18.4D, similarity only in 18.4E, and execution validation afterward.
+Keep Sprint 18.5 next, followed by 18.6 and Sprint 19. Consider persisted version-keyed similarity caches only after profiling. Enrich the index with already-frozen movement fields through a versioned schema migration. Defer learning/adaptation to Sprint 20 and strategy research to Sprint 20.5.

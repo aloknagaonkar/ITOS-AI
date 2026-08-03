@@ -1,19 +1,18 @@
-# Files Changed
+# Files Changed — Sprint 18.4F
 
 ## Added
-- `tests/test_phase_transition_engine.py`
+- `itos_platform/historical_similarity.py`
+- `ui/historical_similarity_workspace.py`
+- `tests/test_historical_similarity.py`
+- `review/docs/HISTORICAL_SIMILARITY_RULES.md`
+- `review/docs/PATTERN_DISCOVERY_RULES.md`
+- `review/docs/CONTEXT_FINGERPRINT_RULES.md`
 
 ## Modified
+- `app.py`
 - `CHANGELOG.md`
-- `dashboard_application_service.py`
-- `engines/institutional_intelligence.py`
-- `tests/test_dashboard_application_service.py`
-- `review/SPRINT_SUMMARY.md`
-- `review/TEST_REPORT.md`
-- `review/BUILD_LOG.txt`
-- `review/FILES_CHANGED.md`
-- `review/ARCHITECTURE_NOTES.md`
-- `review/KNOWN_ISSUES.md`
+- Sprint review documentation under `review/docs/`
+- Focused modified-file copies under `review/source/`
 
 ## Deleted
-- None.
+- None from production. Previous Sprint 18.4E review/source copies were replaced by the required modified-file-only Sprint 18.4F package.

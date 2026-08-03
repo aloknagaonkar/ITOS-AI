@@ -1,7 +1,25 @@
-Sprint 18.4C build
-- Added market lake implementation and behavioural tests.
-- Added generated-data ignore rule and review package.
-- pytest intentionally NOT RUN; local validation required.
-- Hardened result serialization and enrichment diagnostics.
-- Corrected and expanded the documented outcome/MFE behavioural contract.
-- Separated generic identity-preserving persistence from dashboard runtime-key sanitization.
+Sprint 18.4F actual command log
+
+git switch -c feature/historical-similarity
+RESULT: created and switched to branch.
+
+python -m py_compile itos_platform/historical_similarity.py itos_platform/historical_analytics.py ui/historical_similarity_workspace.py app.py tests/test_historical_similarity.py
+RESULT: PASS.
+
+python -m pytest -q tests/test_historical_similarity.py
+RESULT: initial 1 failed, 5 passed; corrected UNKNOWN context handling; final 6 passed in 0.94s.
+
+python -m pytest -q
+RESULT: initial 585 passed, 1 failed in 10.00s; fixed WorkspaceMode compatibility without weakening the test.
+
+python -m pytest -q
+RESULT: PASS, 586 passed in 8.70s (10.896s shell elapsed).
+
+python -m py_compile app.py itos_platform/historical_analytics.py itos_platform/historical_similarity.py ui/historical_similarity_workspace.py tests/test_historical_similarity.py review/source/app.py review/source/historical_analytics.py review/source/historical_similarity.py review/source/historical_similarity_workspace.py review/source/test_historical_similarity.py
+RESULT: PASS.
+
+git diff --check
+RESULT: PASS.
+
+timeout 8s streamlit run app.py --server.headless true --server.port 8765
+RESULT: PASS startup; Uvicorn served on port 8765, then intentional timeout exit 124.
