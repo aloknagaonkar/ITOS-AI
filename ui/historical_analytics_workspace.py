@@ -29,6 +29,9 @@ from itos_platform.historical_analysis_orchestrator import (
     HistoricalAnalysisOrchestrator, HistoricalAnalysisRunRequest,
     HistoricalAnalysisSettings, HistoricalPipelineProgress, JsonRunCheckpointStore,
 )
+from itos_platform.historical_pipeline_observability import (
+    HistoricalPipelineObserver, generate_run_id, normalize_dataframe,
+)
 
 PREFIX = "historical_analytics_"
 TRADE_PREFIX = "historical_trade_review_"
@@ -157,14 +160,35 @@ def render_pipeline_progress(progress: HistoricalPipelineProgress) -> None:
     metrics[2].metric("Status", progress.overall_status.title())
     metrics[3].metric("Requested Dates", progress.expected_dates)
     st.caption(progress.status_message)
-    st.dataframe(pd.DataFrame(pipeline_stage_rows(progress)), hide_index=True,
+    st.dataframe(normalize_dataframe(pd.DataFrame(pipeline_stage_rows(progress))), hide_index=True,
         use_container_width=True)
-    st.dataframe(pd.DataFrame([{
+    st.dataframe(normalize_dataframe(pd.DataFrame([{
         "Date": row.trading_date, "Trading Session Status": row.session.replace("_", " ").title(),
         "Underlying Data": row.underlying, "Historical Options": row.options,
         "Intelligence": row.intelligence, "Outcomes": row.outcomes, "Index": row.index,
         "Final Status": row.final, "Action / Explanation": row.explanation,
-    } for row in progress.date_statuses]), hide_index=True, use_container_width=True)
+    } for row in progress.date_statuses])), hide_index=True, use_container_width=True)
+
+
+def pipeline_diagnostics_rows(progress: HistoricalPipelineProgress) -> tuple[Mapping[str, object], ...]:
+    """Build the read-only developer diagnostics view."""
+    values = (("Run ID", progress.run_id), ("Current Stage", progress.stage),
+        ("Last Completed Stage", progress.last_completed_stage), ("Current Date", progress.current_date or "—"),
+        ("Last Successful Date", progress.last_successful_date or "—"),
+        ("Elapsed Time", f"{progress.elapsed_seconds:.2f} sec"),
+        ("Current Progress", f"{progress.overall_percent:.1f}%"),
+        ("Completed Dates", progress.completed_dates), ("Failed Dates", progress.failed_dates),
+        ("Skipped Dates", progress.skipped_dates), ("Partial Dates", progress.partial_dates),
+        ("Last Exception", progress.last_exception), ("Stage Durations", dict(progress.stage_durations)),
+        ("Checkpoint Path", progress.checkpoint_path), ("Resume Available", progress.resume_available))
+    return tuple({"Diagnostic": label, "Value": value} for label, value in values)
+
+
+def render_pipeline_diagnostics(progress: HistoricalPipelineProgress | None) -> None:
+    st.subheader("Pipeline Diagnostics")
+    if progress is None: st.caption("No Download & Analyze run has started in this session.")
+    else: st.dataframe(normalize_dataframe(pd.DataFrame(pipeline_diagnostics_rows(progress))),
+        hide_index=True, use_container_width=True)
 
 
 def pipeline_progress_view(progress: HistoricalPipelineProgress) -> Mapping[str, object]:
@@ -202,15 +226,15 @@ class PipelineProgressPresenter:
 def _render_sync_result(result: object) -> None:
     """Render a stored result without passing a runtime object to Streamlit."""
     if isinstance(result, pd.DataFrame):
-        st.dataframe(result, hide_index=True, use_container_width=True)
+        st.dataframe(normalize_dataframe(result), hide_index=True, use_container_width=True)
     elif is_dataclass(result) and not isinstance(result, type):
-        st.dataframe(pd.DataFrame(asdict(result).items(), columns=("Result", "Value")), hide_index=True)
+        st.dataframe(normalize_dataframe(pd.DataFrame(asdict(result).items(), columns=("Result", "Value"))), hide_index=True)
     elif isinstance(result, Mapping):
-        st.dataframe(pd.DataFrame(dict(result).items(), columns=("Result", "Value")), hide_index=True)
+        st.dataframe(normalize_dataframe(pd.DataFrame(dict(result).items(), columns=("Result", "Value"))), hide_index=True)
     else:
         model_dump = getattr(result, "model_dump", None)
         values = model_dump() if callable(model_dump) else {"status": "Unavailable"}
-        st.dataframe(pd.DataFrame(values.items(), columns=("Result", "Value")), hide_index=True)
+        st.dataframe(normalize_dataframe(pd.DataFrame(values.items(), columns=("Result", "Value"))), hide_index=True)
 
 
 def _developer_panel(lake: LocalHistoricalMarketLake, provider: str, request: HistoricalRangeRequest,
@@ -335,6 +359,8 @@ def render_historical_analytics_workspace(underlyings: Mapping[str, str], *, pro
         rebuild_intel = st.checkbox("Rebuild intelligence", False, key="historical_simple_ui_rebuild_intelligence")
         rebuild_outcomes = st.checkbox("Rebuild outcomes", False, key="historical_simple_ui_rebuild_outcomes")
         rebuild_index = st.checkbox("Rebuild index", False, key="historical_simple_ui_rebuild_index")
+        diagnostic_progress = st.session_state.get("historical_pipeline_progress_current")
+        render_pipeline_diagnostics(diagnostic_progress if isinstance(diagnostic_progress, HistoricalPipelineProgress) else None)
     def make_orchestrator(run_request):
         def prepare(range_request):
             return service.analyze(HistoricalAnalyticsRequest(run_request.instrument_key,
@@ -349,9 +375,17 @@ def render_historical_analytics_workspace(underlyings: Mapping[str, str], *, pro
                 st.session_state.get("historical_pipeline_cancel_requested", False)))
     if st.button("Download & Analyze", type="primary", use_container_width=True,
                  key="historical_simple_ui_download_analyze"):
+        run_id = generate_run_id()
+        click_observer = HistoricalPipelineObserver(run_id, log_root=settings.historical_log_root,
+            checkpoint_path=lake.root / "runs" / f"{run_id}.json",
+            stall_threshold_seconds=settings.stall_threshold_seconds)
+        click_observer.log("Download & Analyze clicked")
         try:
             run_request = HistoricalAnalysisRunRequest(underlying, instrument, start, end, interval, cadence,
                 include_options, True, rebuild_intel, rebuild_outcomes, rebuild_index)
+            click_observer.log("request built", underlying=underlying, start_date=start, end_date=end,
+                interval_minutes=interval, include_options=include_options)
+            click_observer.close()
             run_request.validate(settings, underlyings)
             orchestrator = make_orchestrator(run_request)
             st.session_state["historical_pipeline_cancel_requested"] = False
@@ -360,14 +394,23 @@ def render_historical_analytics_workspace(underlyings: Mapping[str, str], *, pro
             def report(value):
                 st.session_state["historical_pipeline_progress_current"] = value
                 presenter(value)
-            run = orchestrator.run(run_request, progress_callback=report)
+            run = orchestrator.run(run_request, progress_callback=report, run_id=run_id)
             st.session_state["historical_pipeline_run_active"] = run
             st.session_state["historical_pipeline_run_request"] = run_request
             st.session_state["historical_pipeline_results_current"] = run.analytics
             st.session_state[PREFIX+"result"] = run.analytics
-        except ValueError as error: st.error(str(error))
-        except HistoricalAuthenticationError: st.error("Authentication required before historical data can be downloaded.")
-        except Exception: st.error("Historical Analysis could not start. Review Advanced Diagnostics.")
+        except ValueError as error:
+            if click_observer._handler in click_observer.logger.handlers:
+                click_observer.stage_failed("BUTTON_CALLBACK", error); click_observer.close()
+            st.error(str(error))
+        except HistoricalAuthenticationError as error:
+            if click_observer._handler in click_observer.logger.handlers:
+                click_observer.stage_failed("BUTTON_CALLBACK", error); click_observer.close()
+            st.error("Authentication required before historical data can be downloaded.")
+        except Exception as error:
+            if click_observer._handler in click_observer.logger.handlers:
+                click_observer.stage_failed("BUTTON_CALLBACK", error); click_observer.close()
+            st.error("Historical Analysis could not start. Review Advanced Diagnostics.")
     manager_request = HistoricalRangeRequest(underlying, instrument, start, end, interval, include_options=False)
     _developer_panel(lake, provider, manager_request, actions, sync_manager, cadence)
     progress = st.session_state.get("historical_pipeline_progress_current")
@@ -422,7 +465,7 @@ def render_historical_analytics_workspace(underlyings: Mapping[str, str], *, pro
                 if isinstance(value, (str, int, float, bool)): columns[index % len(columns)].metric(label, value)
                 else: columns[index % len(columns)].caption(f"**{label}:** {value or '—'}")
             with st.expander("View Details"):
-                st.dataframe(pd.DataFrame(result.detail_rows), hide_index=True, use_container_width=True)
+                st.dataframe(normalize_dataframe(pd.DataFrame(result.detail_rows)), hide_index=True, use_container_width=True)
 
     st.header("Historical Trade Review")
     reviews = build_trade_reviews(result.records, result.outcome_records, manifest.option_dates if manifest else ())

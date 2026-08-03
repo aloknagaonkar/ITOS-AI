@@ -6,8 +6,8 @@ from enum import Enum
 import json
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
-from uuid import uuid4
 from .market_lake import HistoricalRangeRequest, MarketLakeSettings
+from .historical_pipeline_observability import HistoricalPipelineObserver, generate_run_id
 
 class PipelineStage(str, Enum):
     PLAN="PLAN"; DOWNLOAD_UNDERLYING="DOWNLOAD_UNDERLYING"; DOWNLOAD_OPTIONS="DOWNLOAD_OPTIONS"
@@ -24,6 +24,7 @@ class HistoricalAnalysisSettings:
     cancel_after_current_date_enabled: bool=True; retry_failed_dates_enabled: bool=True
     missed_opportunity_summary_enabled: bool=True; normal_ui_json_disabled: bool=True
     advanced_controls_enabled: bool=True
+    historical_log_root: str="logs/historical"; stall_threshold_seconds: float=60.0
 
 @dataclass(frozen=True)
 class HistoricalAnalysisRunRequest:
@@ -58,6 +59,9 @@ class HistoricalPipelineProgress:
     explanations:tuple[str,...]=(); option_expiries:int=0; option_contracts_total:int=0
     option_contracts_complete:int=0; option_contracts_failed:int=0; option_oi_coverage:float|None=None
     option_volume_coverage:float|None=None; option_ce_total:int=0; option_pe_total:int=0
+    last_completed_stage:str="—"; last_successful_date:date|None=None; elapsed_seconds:float=0.0
+    last_exception:str="—"; stage_durations:tuple[tuple[str,float],...]=(); checkpoint_path:str="—"
+    resume_available:bool=False
     def __post_init__(self):
         object.__setattr__(self,"overall_percent",min(100.,max(0.,self.overall_percent)))
         object.__setattr__(self,"stage_percent",min(100.,max(0.,self.stage_percent)))
@@ -66,6 +70,7 @@ class HistoricalPipelineProgress:
 class HistoricalAnalysisRunResult:
     run_id:str; status:str; progress:HistoricalPipelineProgress; analytics:Any=None
     started_at:datetime|None=None; completed_at:datetime|None=None
+    diagnostics:Any=None
 
 @dataclass(frozen=True)
 class HistoricalAnalysisRunState:
@@ -118,11 +123,13 @@ def _count(value,*names):
 class HistoricalAnalysisOrchestrator:
     """Per-date coordinator which maps actual service results into durable state."""
     def __init__(self,*,sync_underlying,download_options=None,build_intelligence=None,build_outcomes=None,
-                 build_index=None,prepare_analytics=None,checkpoint_store=None,settings=HistoricalAnalysisSettings(),should_cancel=None):
+                 build_index=None,prepare_analytics=None,checkpoint_store=None,settings=HistoricalAnalysisSettings(),should_cancel=None,
+                 observer_factory=HistoricalPipelineObserver):
         self.operations={PipelineStage.DOWNLOAD_UNDERLYING:sync_underlying,PipelineStage.DOWNLOAD_OPTIONS:download_options,
             PipelineStage.BUILD_INTELLIGENCE:build_intelligence,PipelineStage.BUILD_OUTCOMES:build_outcomes,
             PipelineStage.BUILD_INDEX:build_index,PipelineStage.PREPARE_ANALYTICS:prepare_analytics}
         self.checkpoints=checkpoint_store; self.settings=settings; self.should_cancel=should_cancel or (lambda:False); self.cancel_requested=False
+        self.observer_factory=observer_factory
     def cancel_after_current_date(self): self.cancel_requested=True
     def _invoke(self,stage,request,day):
         operation=self.operations.get(stage)
@@ -136,7 +143,11 @@ class HistoricalAnalysisOrchestrator:
             if not run_id or not self.checkpoints: raise ValueError("A checkpointed run ID is required to resume.")
             saved_request,loaded=self.checkpoints.load(run_id)
             if saved_request!=request: request=saved_request
-        run_id=run_id or uuid4().hex
+        run_id=run_id or generate_run_id()
+        checkpoint_path=(self.checkpoints.root/f"{run_id}.json") if self.checkpoints else None
+        observer=self.observer_factory(run_id,log_root=self.settings.historical_log_root,
+            checkpoint_path=checkpoint_path,stall_threshold_seconds=self.settings.stall_threshold_seconds)
+        observer.log("orchestrator.run() called", resume=resume, index_only=index_only)
         days=tuple(date.fromordinal(n) for n in range(request.start_date.toordinal(),request.end_date.toordinal()+1))
         if loaded: rows=list(loaded.date_statuses)
         else: rows=[DatePipelineStatus(d,"NOT_TRADING_SESSION",underlying="Not Trading Session",options="Not Trading Session",intelligence="Not Trading Session",outcomes="Not Trading Session",index="Not indexed",final="Skipped",explanation="Weekend") if d.weekday()>=5 else DatePipelineStatus(d) for d in days]
@@ -171,14 +182,34 @@ class HistoricalAnalysisOrchestrator:
                 downloaded,stored,completed,partial,failed,skipped,refreshed,
                 option_expiries=option_stats[0],option_contracts_total=option_stats[1],option_contracts_complete=option_stats[2],option_contracts_failed=option_stats[3],
                 option_oi_coverage=option_oi,option_volume_coverage=option_volume,
-                option_ce_total=option_stats[4],option_pe_total=option_stats[5])
+                option_ce_total=option_stats[4],option_pe_total=option_stats[5],
+                last_completed_stage=observer.diagnostics.last_completed_stage,
+                last_successful_date=observer.diagnostics.last_successful_date,
+                elapsed_seconds=observer.diagnostics.elapsed_time,last_exception=observer.diagnostics.last_exception,
+                stage_durations=tuple(observer.diagnostics.stage_durations.items()),
+                checkpoint_path=observer.diagnostics.checkpoint_path,
+                resume_available=bool(self.checkpoints and self.settings.resume_enabled))
+            observer.diagnostics.current_progress=p.overall_percent
+            observer.diagnostics.completed_dates=p.completed_dates; observer.diagnostics.failed_dates=p.failed_dates
+            observer.diagnostics.skipped_dates=p.skipped_dates; observer.diagnostics.partial_dates=p.partial_dates
             if self.checkpoints and self.settings.checkpoint_enabled:self.checkpoints.save(request,p)
             if progress_callback:progress_callback(p)
             return p
+        observer.stage_started(PipelineStage.PLAN.value,days)
+        for row in rows:
+            observer.date_status(row.trading_date,PipelineStage.PLAN.value,
+                "skipped" if row.session=="NOT_TRADING_SESSION" else "planned")
+        progress=emit(PipelineStage.PLAN,"RUNNING","Planning trading sessions...",stage_done=len(days),stage_total=len(days))
+        observer.stage_completed(PipelineStage.PLAN.value,days)
         progress=emit(PipelineStage.PLAN,"COMPLETE",f"Prepared {len(days)} requested dates.",stage_done=len(days),stage_total=len(days))
         for stage in enabled:
             operation=self.operations.get(stage)
-            if operation is None or (stage is PipelineStage.DOWNLOAD_OPTIONS and not request.include_historical_options): continue
+            if operation is None or (stage is PipelineStage.DOWNLOAD_OPTIONS and not request.include_historical_options):
+                reason="operation unavailable" if operation is None else "historical options disabled by request"
+                observer.stage_started(stage.value,active); observer.log(f"{stage.value} skipped",reason=reason)
+                for day in active: observer.date_status(day,stage.value,"skipped",reason=reason)
+                observer.stage_completed(stage.value,active)
+                continue
             candidates=[]
             for row in rows:
                 if row.trading_date not in active:continue
@@ -188,7 +219,15 @@ class HistoricalAnalysisOrchestrator:
                 if stage is PipelineStage.BUILD_OUTCOMES and (row.intelligence!="Intelligence Complete" or (row.outcomes in {"Outcomes Complete","Outcomes Not Evaluable"} and not request.rebuild_outcomes)):continue
                 if stage is PipelineStage.BUILD_INDEX and (row.intelligence!="Intelligence Complete" or (row.index=="Indexed" and not request.rebuild_index)):continue
                 candidates.append(row.trading_date)
+            observer.stage_started(stage.value,candidates)
+            stage_messages={PipelineStage.DOWNLOAD_UNDERLYING:"Checking existing Market Lake data...",
+                PipelineStage.DOWNLOAD_OPTIONS:"Downloading option history...",
+                PipelineStage.BUILD_INTELLIGENCE:"Building ITOS intelligence...",
+                PipelineStage.BUILD_OUTCOMES:"Building historical outcomes...",
+                PipelineStage.BUILD_INDEX:"Updating historical index..."}
+            progress=emit(stage,"RUNNING",stage_messages[stage],stage_total=len(candidates))
             for number,day in enumerate(candidates,1):
+                operation_started=datetime.now(timezone.utc)
                 try:
                     value=self._invoke(stage,request,day)
                     if stage is PipelineStage.DOWNLOAD_UNDERLYING:
@@ -235,25 +274,51 @@ class HistoricalAnalysisOrchestrator:
                         if index_failed>0:update(day,index="Index Failed",explanation="Source ready; similarity index unavailable")
                         elif index_completed>0 or index_skipped>0:update(day,index="Indexed",explanation="Historical index current")
                         else:update(day,index="Index Pending",explanation="No index records were built or confirmed current")
+                    current_row=next(row for row in rows if row.trading_date==day)
+                    status={PipelineStage.DOWNLOAD_UNDERLYING:current_row.underlying,
+                        PipelineStage.DOWNLOAD_OPTIONS:current_row.options,PipelineStage.BUILD_INTELLIGENCE:current_row.intelligence,
+                        PipelineStage.BUILD_OUTCOMES:current_row.outcomes,PipelineStage.BUILD_INDEX:current_row.index}[stage]
+                    observer.diagnostics.last_successful_date=day
+                    observer.date_status(day,stage.value,status,rows_stored=_count(value,"stored_row_count"),
+                        rows_skipped=_count(value,"skipped_row_count"),option_coverage=getattr(value,"oi_coverage",None),
+                        analysis_points=_count(value,"completed","analysis_points"),outcomes_built=len(records) if stage is PipelineStage.BUILD_OUTCOMES else 0,
+                        index_records=_count(value,"completed") if stage is PipelineStage.BUILD_INDEX else 0)
                 except Exception as error:
+                    observer.stage_failed(stage.value,error,day=day)
                     if stage is PipelineStage.DOWNLOAD_OPTIONS:update(day,options="Options Unavailable",explanation=str(error) or "Options unavailable")
                     elif stage is PipelineStage.BUILD_INTELLIGENCE:update(day,intelligence="Intelligence Failed",explanation=str(error) or "Intelligence failed")
                     elif stage is PipelineStage.BUILD_OUTCOMES:update(day,outcomes="Outcomes Pending",explanation=str(error) or "Outcomes pending")
                     elif stage is PipelineStage.BUILD_INDEX:update(day,index="Index Failed",explanation=str(error) or "Index failed")
                     else:update(day,underlying="Failed",explanation=str(error) or "Download failed")
+                    observer.date_status(day,stage.value,"failed")
                 done+=1; progress=emit(stage,"RUNNING",stage.value.replace("_"," ").title(),day,number,len(candidates))
+                observer.validate_stall(stage.value,day,(datetime.now(timezone.utc)-operation_started).total_seconds(),f"date {day}")
                 if self.cancel_requested or self.should_cancel():
                     progress=emit(stage,"CANCELLED","Cancelled after the current date; completed work was preserved.",day,number,len(candidates))
-                    return HistoricalAnalysisRunResult(run_id,"CANCELLED",progress,started_at=started)
+                    observer.log("orchestrator.run() returned",status="CANCELLED"); observer.close()
+                    return HistoricalAnalysisRunResult(run_id,"CANCELLED",progress,started_at=started,diagnostics=observer.diagnostics)
+            observer.stage_completed(stage.value,candidates)
         if not index_only and self.operations.get(PipelineStage.PREPARE_ANALYTICS):
-            analytics=self.operations[PipelineStage.PREPARE_ANALYTICS](request.range_request()); done+=1
+            observer.stage_started(PipelineStage.PREPARE_ANALYTICS.value,active)
+            progress=emit(PipelineStage.PREPARE_ANALYTICS,"RUNNING","Preparing Historical Results...",stage_total=1)
+            try: analytics=self.operations[PipelineStage.PREPARE_ANALYTICS](request.range_request())
+            except Exception as error:
+                observer.stage_failed(PipelineStage.PREPARE_ANALYTICS.value,error); observer.close(); raise
+            done+=1; observer.stage_completed(PipelineStage.PREPARE_ANALYTICS.value,active)
             progress=emit(PipelineStage.PREPARE_ANALYTICS,"COMPLETE","Historical results prepared.",stage_done=1,stage_total=1)
+        elif not index_only:
+            observer.stage_started(PipelineStage.PREPARE_ANALYTICS.value,active)
+            observer.log("PREPARE_ANALYTICS skipped",reason="operation unavailable; analytics not executed")
+            observer.stage_completed(PipelineStage.PREPARE_ANALYTICS.value,active)
         status="PARTIAL" if any(ready(r) in {"Retry Required","Partial"} or
             r.index=="Index Failed" for r in rows) else "COMPLETE"
         # Blocked units are resolved (not silently counted as successful), so a
         # finished run reaches 100% while its PARTIAL/date statuses retain truth.
         done=total
+        observer.diagnostics.stage_durations["TOTAL"]=(datetime.now(timezone.utc)-started).total_seconds()
         progress=emit(PipelineStage.COMPLETE,status,"Results ready." if analytics is not None else "Processing complete.",stage_done=1,stage_total=1)
-        return HistoricalAnalysisRunResult(run_id,status,progress,analytics,started,datetime.now(timezone.utc))
+        observer.log("COMPLETE",status=status); observer.log("orchestrator.run() returned",status=status)
+        observer.close()
+        return HistoricalAnalysisRunResult(run_id,status,progress,analytics,started,datetime.now(timezone.utc),observer.diagnostics)
     def retry_failed_dates(self,request,run_id,**kwargs): return self.run(request,run_id=run_id,resume=True,**kwargs)
     def retry_index_only(self,request,run_id,**kwargs): return self.run(request,run_id=run_id,resume=True,index_only=True,**kwargs)
