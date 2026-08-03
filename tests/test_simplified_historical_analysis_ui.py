@@ -1,6 +1,6 @@
 from datetime import date
 from itos_platform.historical_analysis_orchestrator import DatePipelineStatus,HistoricalPipelineProgress
-from ui.historical_analytics_workspace import PipelineProgressPresenter,pipeline_progress_view
+from ui.historical_analytics_workspace import PipelineProgressPresenter,pipeline_progress_view,pipeline_stage_rows
 
 def test_progress_view_model_renders_final_results_without_runtime_objects():
  progress=HistoricalPipelineProgress("run","COMPLETE","COMPLETE","COMPLETE",100,100,None,None,"Results ready",1,
@@ -31,3 +31,11 @@ def test_view_model_preserves_similarity_unavailable_readiness():
    intelligence="Intelligence Complete",outcomes="Outcomes Complete",index="Index Failed",
    final="Ready — Similarity unavailable"),))
  assert pipeline_progress_view(progress)["dates"][0]["Final Status"]=="Ready — Similarity unavailable"
+
+def test_option_stage_is_terminal_when_intelligence_is_running():
+ progress=HistoricalPipelineProgress("run","RUNNING","BUILD_INTELLIGENCE","RUNNING",50,0,date(2026,7,1),None,"Building",1,
+  option_total=1,option_complete=1,intelligence_total=1,
+  date_statuses=(DatePipelineStatus(date(2026,7,1),underlying="Existing",options="Unavailable"),))
+ rows={row["Stage"]:row["Status"] for row in pipeline_stage_rows(progress)}
+ assert rows["Historical options"]=="Unavailable"
+ assert rows["ITOS intelligence"]=="Running"
