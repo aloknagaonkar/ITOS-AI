@@ -182,3 +182,6 @@
 - Added traceable differences, post-score factual outcomes, explicit opposite groups, diversity controls, and deterministic pattern discovery.
 - Added an advisory Historical Similarity Streamlit workspace with readable tables, navigation targets, and CSV/JSON/optional Parquet exports.
 - Preserved all recommendation, confidence, validation, ranking, safety, replay, and execution behavior.
+
+## Sprint 18.4F.1 — Historical Pipeline Integration
+- Added shared historical application composition, explicit build/index/finalization/option actions, pipeline status, point-in-time runner, and hardened SQLite diagnostics.

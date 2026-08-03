@@ -16,3 +16,6 @@
 
 ## Deleted
 - None from production. Previous Sprint 18.4E review/source copies were replaced by the required modified-file-only Sprint 18.4F package.
+
+## Sprint 18.4F.1
+Added `itos_platform/historical_pipeline.py`, integration tests, and historical pipeline/database rules. Modified the app composition, analytics workspace, historical SQLite index, release documentation, and validation records.

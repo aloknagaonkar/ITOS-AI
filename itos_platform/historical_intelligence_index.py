@@ -276,8 +276,27 @@ class SQLiteHistoricalIntelligenceIndex:
         self.settings = settings; settings.historical_index_path.parent.mkdir(parents=True, exist_ok=True)
         self._initialize()
     def _connect(self):
-        connection = sqlite3.connect(self.settings.historical_index_path)
-        connection.row_factory = sqlite3.Row; return connection
+        connection = sqlite3.connect(self.settings.historical_index_path, timeout=5.0)
+        connection.row_factory = sqlite3.Row
+        connection.execute("PRAGMA foreign_keys = ON")
+        connection.execute("PRAGMA journal_mode = WAL")
+        connection.execute("PRAGMA busy_timeout = 5000")
+        connection.execute("PRAGMA synchronous = NORMAL")
+        return connection
+
+    def integrity_diagnostics(self) -> Mapping[str, Any]:
+        """Return safe, connection-scoped SQLite diagnostics for the UI."""
+        with self._connect() as db:
+            integrity = str(db.execute("PRAGMA integrity_check").fetchone()[0])
+            schema = db.execute(
+                "SELECT value FROM index_metadata WHERE key='schema_version'"
+            ).fetchone()
+        return {
+            "path": str(self.settings.historical_index_path),
+            "schema_version": schema[0] if schema else None,
+            "integrity": integrity,
+            "fingerprint_version": self.settings.fingerprint_version,
+        }
     def _initialize(self):
         definitions = ",".join(f"{c} " + ("REAL" if c in {"decision_confidence", "trigger_pass_ratio"} else "INTEGER" if c == "interval_minutes" else "TEXT") for c in _COLUMNS)
         with self._connect() as db:

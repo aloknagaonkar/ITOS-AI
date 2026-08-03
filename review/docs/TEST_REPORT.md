@@ -8,3 +8,11 @@
 - `git diff --check`: PASS.
 - `timeout 8s streamlit run app.py --server.headless true --server.port 8765`: PASS startup smoke — server started on port 8765 and was intentionally stopped by timeout (exit 124).
 - Manual UI validation: NOT RUN — DEVELOPER VALIDATION REQUIRED.
+Sprint 18.4F.1 validation
+- py_compile: PASS
+- focused integration tests: PASS
+- full pytest: PASS (588 passed)
+- deterministic local Market Lake/index fixture: PASS (focused integration test)
+- git diff --check: PASS
+- Streamlit startup smoke: PASS
+- live broker calls: NONE
