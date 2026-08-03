@@ -1,5 +1,6 @@
-# Sprint Summary
-Sprint 18.4F implements an advisory Similarity & Pattern Discovery layer over frozen Historical Intelligence Index records: request validation, indexed candidates, explainable scoring/coverage, difference analysis, outcomes attached after scoring, patterns, diversity, opposite groups, exports, and a Streamlit workspace. No decision or execution formula changed.
+# Sprint Summary — 18.4F.2
 
-## Sprint 18.4F.1
-Integrated the existing historical services through a shared Market Lake and historical index composition root. Analytical and recommendation formulas were unchanged.
+Implemented the immutable request/progress/result contracts, stable run IDs, safe checkpoints, deterministic one-click orchestration, non-blocking option handling, simplified Streamlit request/progress experience, automatic stored results, and focused deterministic tests. Analytical formulas, replay behavior, live behavior and database technologies were not changed.
+
+## Hardening follow-up
+Progress and completion claims now come from actual per-date service results. Checkpoint loading, cross-instance resume, failed-only/index-only retry, cadence propagation, date-boundary cancellation checks, dependency gates and behavioural tests are implemented without changing analytical formulas.

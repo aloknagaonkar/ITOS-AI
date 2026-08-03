@@ -1,49 +1,16 @@
-# Sprint 18.4F.1 Build Log
+# Sprint 18.4F.2 Final Correction — Test Report
 
-Branch: feature/historical-pipeline-integration
-Baseline: main (local branch at 1313e7b)
-Real broker calls: none
-Orders placed: none
+## Commands and actual outputs
 
-## Modified-file compilation
+1. `python -m py_compile itos_platform/historical_analysis_orchestrator.py ui/historical_analytics_workspace.py tests/test_historical_analysis_orchestrator.py tests/test_simplified_historical_analysis_ui.py`
+   - PASS (exit 0; no output).
+2. `python -m pytest -q tests/test_historical_analysis_orchestrator.py tests/test_simplified_historical_analysis_ui.py`
+   - PASS: `18 passed in 2.13s`.
+3. `python -m pytest -q`
+   - PASS: `607 passed in 9.53s`.
+4. `git diff --check`
+   - PASS (exit 0; no output).
 
-```
-COMMAND: python -m py_compile app.py itos_platform/historical_intelligence_index.py itos_platform/historical_pipeline.py review/source/app.py review/source/itos_platform/historical_intelligence_index.py review/source/itos_platform/historical_pipeline.py review/source/tests/test_historical_pipeline_integration.py review/source/ui/historical_analytics_workspace.py review/source/ui/historical_similarity_workspace.py review/source/ui/replay_workspace.py tests/test_historical_pipeline_integration.py ui/historical_analytics_workspace.py ui/historical_similarity_workspace.py ui/replay_workspace.py
-EXIT: 0
-```
+Focused tests cover completed index records, skipped/current index records, failed index records, zero-count pending results, explicit Similarity-unavailable final readiness, and the existing behavioural progress/view-model suite.
 
-## Focused historical integration suite
-
-Command:
-`python -m pytest -q tests/test_historical_pipeline_integration.py tests/test_historical_market_lake.py tests/test_historical_intelligence_index.py tests/test_historical_options_and_live_capture.py tests/test_historical_similarity.py tests/test_historical_trade_review.py tests/test_historical_replay_ux.py`
-
-```
-........................................................................ [ 63%]
-.........................................                                [100%]
-113 passed in 2.31s
-```
-
-## Full regression suite
-
-Command: `python -m pytest -q`
-
-```
-........................................................................ [ 12%]
-........................................................................ [ 24%]
-........................................................................ [ 36%]
-........................................................................ [ 48%]
-........................................................................ [ 61%]
-........................................................................ [ 73%]
-........................................................................ [ 85%]
-........................................................................ [ 97%]
-.............                                                            [100%]
-589 passed in 8.86s
-```
-
-## Patch validation
-
-Command: `git diff --check`
-
-```
-EXIT: 0
-```
+No authenticated Upstox calls were made. No orders were placed. No analytical formulas, CE/PE/WAIT behavior, similarity formulas, or database technologies changed. Manual UI validation: NOT RUN — DEVELOPER VALIDATION REQUIRED.
