@@ -35,6 +35,12 @@ class MarketLakeActions:
     sync_missing_data: Callable[[HistoricalRangeRequest], object] | None = None
     build_intelligence: Callable[[HistoricalRangeRequest], object] | None = None
     build_outcomes: Callable[[HistoricalRangeRequest], object] | None = None
+    build_index: Callable[[HistoricalRangeRequest], object] | None = None
+    validate_index: Callable[[HistoricalRangeRequest], object] | None = None
+    rebuild_outdated: Callable[[HistoricalRangeRequest], object] | None = None
+    finalize_today: Callable[[HistoricalRangeRequest], object] | None = None
+    download_options: Callable[[HistoricalRangeRequest], object] | None = None
+    index_status: Callable[[HistoricalRangeRequest], object] | None = None
 
 
 def _option(label: str) -> str | None:
@@ -203,6 +209,36 @@ def _developer_panel(lake: LocalHistoricalMarketLake, provider: str, request: Hi
                     st.success(f"{label} completed through the Market Lake service.")
                 except HistoricalAuthenticationError: st.error("Historical Upstox authentication failed.")
                 except Exception: st.error(f"{label} failed. Review sanitized application logs.")
+        index_callbacks = (
+            ("Build Missing Index", actions.build_index),
+            ("Validate Index", actions.validate_index),
+            ("Rebuild Outdated Fingerprints", actions.rebuild_outdated),
+            ("Finalize Today", actions.finalize_today),
+        )
+        index_buttons = st.columns(4)
+        for column, (label, callback) in zip(index_buttons, index_callbacks):
+            if column.button(label, key=PREFIX+label.lower().replace(" ", "_"), disabled=callback is None):
+                try:
+                    value = callback(range_request)
+                    st.session_state[PREFIX+"maintenance_result"] = value
+                    st.success(f"{label} completed.")
+                except Exception:
+                    st.error(f"{label} could not complete; stored data and index were not corrupted.")
+        if actions.index_status is not None:
+            try:
+                index_status = actions.index_status(range_request)
+                st.subheader("Historical Pipeline Status")
+                st.dataframe(pd.DataFrame(index_status.items(), columns=("Stage", "Status")),
+                             hide_index=True, use_container_width=True)
+            except Exception:
+                st.warning("Historical index diagnostics are temporarily unavailable (the database may be locked).")
+        if actions.download_options is not None and st.button(
+                "Download Historical Options", key=PREFIX+"download_historical_options"):
+            try:
+                st.session_state[PREFIX+"option_result"] = actions.download_options(range_request)
+                st.success("Historical option candle download completed.")
+            except Exception:
+                st.warning("Historical options are unavailable; underlying analytics remains available.")
         if st.button("Reset UI Progress", key=PREFIX+"reset_progress"):
             for key in tuple(st.session_state):
                 if key in (PREFIX+"sync_plan", PREFIX+"sync_result", PREFIX+"progress"): del st.session_state[key]

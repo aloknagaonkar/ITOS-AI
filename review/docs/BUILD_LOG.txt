@@ -23,3 +23,11 @@ RESULT: PASS.
 
 timeout 8s streamlit run app.py --server.headless true --server.port 8765
 RESULT: PASS startup; Uvicorn served on port 8765, then intentional timeout exit 124.
+Sprint 18.4F.1 validation
+- py_compile: PASS
+- focused integration tests: PASS
+- full pytest: PASS (588 passed)
+- deterministic local Market Lake/index fixture: PASS (focused integration test)
+- git diff --check: PASS
+- Streamlit startup smoke: PASS
+- live broker calls: NONE

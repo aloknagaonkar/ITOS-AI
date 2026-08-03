@@ -68,6 +68,8 @@ from ui.historical_similarity_workspace import render_historical_similarity_work
 from itos_platform.historical_analytics import WorkspaceMode
 from itos_platform.historical_sync import HistoricalSyncManager, UpstoxHistoricalSyncProvider
 from itos_platform.market_lake import LocalHistoricalMarketLake
+from itos_platform.historical_pipeline import compose_historical_pipeline
+from ui.historical_analytics_workspace import MarketLakeActions
 
 load_dotenv()
 st.set_page_config(
@@ -152,20 +154,48 @@ st.caption(
 )
 token = auth()
 authenticated_client = UpstoxClient(token) if token else None
+historical_pipeline = compose_historical_pipeline(authenticated_client)
 initialize_replay_state(st.session_state)
 workspace_mode = st.sidebar.selectbox(
     "Top Level Mode", (*tuple(WorkspaceMode), "HISTORICAL_SIMILARITY"),
     format_func=lambda mode: (mode.value if isinstance(mode, WorkspaceMode) else mode).replace("_", " "),
 )
 if workspace_mode is WorkspaceMode.HISTORICAL_ANALYTICS:
-    historical_lake = LocalHistoricalMarketLake()
-    historical_provider = (UpstoxHistoricalSyncProvider(client=authenticated_client)
-                           if authenticated_client is not None else None)
-    render_historical_analytics_workspace(UNDERLYINGS, lake=historical_lake,
-        sync_manager=HistoricalSyncManager(provider=historical_provider, market_lake=historical_lake))
+    def pipeline_status(request):
+        records = historical_pipeline.intelligence_records(request)
+        status = historical_pipeline.index.get_status(records)
+        manifest = historical_pipeline.lake.get_manifest("upstox", request.instrument_key, request.interval_minutes)
+        raw = len(manifest.available_dates) if manifest else 0
+        outcomes = len(manifest.outcome_dates) if manifest else 0
+        options = len(manifest.option_dates) if manifest else 0
+        next_action = ("Download raw data" if not raw else "Build intelligence" if not records
+                       else "Build outcomes" if not outcomes else "Build missing index" if status.missing_index_records
+                       else "Index is ready")
+        return {"Raw Data": f"{raw} session(s)", "Historical Options": f"{options} session(s)",
+                "Intelligence": f"{len(records)} record(s)", "Outcomes": f"{outcomes} session(s)",
+                "Index": f"{status.total_indexed_records} indexed / {status.missing_index_records} missing / {status.outdated_fingerprint_records} outdated / {status.invalid_records} invalid",
+                "Similarity": "index ready" if status.total_indexed_records else "index not ready",
+                "Index path": str(historical_pipeline.index.settings.historical_index_path),
+                "Recommended Next Action": next_action}
+    actions = MarketLakeActions(
+        build_intelligence=lambda request: historical_pipeline.build_intelligence(request),
+        build_outcomes=historical_pipeline.build_outcomes,
+        build_index=historical_pipeline.build_index,
+        validate_index=historical_pipeline.validate_index,
+        rebuild_outdated=lambda request: historical_pipeline.build_index(request, rebuild_outdated=True),
+        finalize_today=lambda request: historical_pipeline.finalization.finalize(
+            request.instrument_key, request.interval_minutes, date.today(),
+            historical_pipeline.lake.settings.engine_version),
+        download_options=(None if historical_pipeline.option_service is None else
+            lambda request: historical_pipeline.option_service.download(
+                request.instrument_key, request.start_date, request.end_date)),
+        index_status=pipeline_status,
+    )
+    render_historical_analytics_workspace(UNDERLYINGS, lake=historical_pipeline.lake,
+        actions=actions, sync_manager=historical_pipeline.sync_manager)
     st.stop()
 if workspace_mode == "HISTORICAL_SIMILARITY":
-    render_historical_similarity_workspace()
+    render_historical_similarity_workspace(historical_pipeline.index)
     st.stop()
 selected_mode = {
     WorkspaceMode.LIVE: DataMode.LIVE,
