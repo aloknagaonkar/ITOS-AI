@@ -49,3 +49,40 @@ def test_historical_option_timeout_is_configured_and_non_blocking(tmp_path):
  lake=LocalHistoricalMarketLake(MarketLakeSettings(market_lake_root=tmp_path))
  result=HistoricalOptionDownloadService(TimeoutExpired(),lake,request_timeout_seconds=3.5).download("NIFTY",STAMP.date(),STAMP.date())
  assert result.status=="OPTION_DATA_UNAVAILABLE" and result.contracts_stored==0
+
+class CountingExpired(FakeExpired):
+ def __init__(self): self.calls=[]
+ def get_expired_option_expiries(self,key): self.calls.append("expiries"); return super().get_expired_option_expiries(key)
+ def get_expired_option_contracts(self,key,expiry): self.calls.append("contracts"); return super().get_expired_option_contracts(key,expiry)
+ def get_expired_historical_candles(self,key,start,end,interval): self.calls.append("candles"); return super().get_expired_historical_candles(key,start,end,interval)
+
+def test_historical_option_repeat_download_reuses_partial_market_lake_status(tmp_path):
+ lake=LocalHistoricalMarketLake(MarketLakeSettings(market_lake_root=tmp_path)); client=CountingExpired()
+ service=HistoricalOptionDownloadService(client,lake)
+ first=service.download("NIFTY",STAMP.date(),STAMP.date(),underlying="NIFTY")
+ assert first.status=="PARTIAL_OPTION_COVERAGE" and client.calls
+ client.calls.clear()
+ second=service.download("NIFTY",STAMP.date(),STAMP.date(),underlying="NIFTY")
+ assert second.status=="OPTION_DATA_EXISTING" and second.skipped_dates==(STAMP.date(),)
+ assert client.calls==[]
+
+def test_historical_option_repeat_download_reuses_unavailable_status(tmp_path):
+ class NoExpiries(CountingExpired):
+  def get_expired_option_expiries(self,key): self.calls.append("expiries"); return []
+ lake=LocalHistoricalMarketLake(MarketLakeSettings(market_lake_root=tmp_path)); client=NoExpiries()
+ service=HistoricalOptionDownloadService(client,lake)
+ first=service.download("NIFTY",STAMP.date(),STAMP.date(),underlying="NIFTY")
+ assert first.status=="OPTION_DATA_UNAVAILABLE"
+ client.calls.clear()
+ second=service.download("NIFTY",STAMP.date(),STAMP.date(),underlying="NIFTY")
+ assert second.status=="OPTION_DATA_PREVIOUSLY_UNAVAILABLE"
+ assert client.calls==[]
+
+def test_historical_option_force_redownload_ignores_cached_terminal_status(tmp_path):
+ lake=LocalHistoricalMarketLake(MarketLakeSettings(market_lake_root=tmp_path)); client=CountingExpired()
+ service=HistoricalOptionDownloadService(client,lake)
+ service.download("NIFTY",STAMP.date(),STAMP.date(),underlying="NIFTY")
+ client.calls.clear()
+ result=service.download("NIFTY",STAMP.date(),STAMP.date(),underlying="NIFTY",force=True)
+ assert result.status=="PARTIAL_OPTION_COVERAGE"
+ assert client.calls

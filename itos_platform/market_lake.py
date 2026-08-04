@@ -76,6 +76,7 @@ class HistoricalRangeRequest:
     rebuild_raw: bool = False
     rebuild_intelligence: bool = False
     rebuild_outcomes: bool = False
+    rebuild_options: bool = False
 
     def validate(self, settings: MarketLakeSettings = MarketLakeSettings(), *, today: date | None = None) -> None:
         if not self.underlying.strip() or not self.instrument_key.strip():
@@ -121,6 +122,8 @@ class DatasetManifest:
     failed_dates: tuple[date, ...] = ()
     no_data_dates: tuple[date, ...] = ()
     option_dates: tuple[date, ...] = ()
+    option_partial_dates: tuple[date, ...] = ()
+    option_unavailable_dates: tuple[date, ...] = ()
     intelligence_dates: tuple[date, ...] = ()
     outcome_dates: tuple[date, ...] = ()
     raw_record_count: int = 0
@@ -487,6 +490,50 @@ class LocalHistoricalMarketLake:
     def put_manifest(self, manifest: DatasetManifest) -> None:
         _atomic_json(self._manifest_path(manifest.provider, manifest.instrument_key, manifest.interval_minutes), asdict(manifest))
 
+
+    def option_download_status(self, provider: str, instrument_key: str, interval: int, day: date) -> str | None:
+        """Return the durable terminal option-download state for a trading date."""
+        manifest = self.get_manifest(provider, instrument_key, interval)
+        if manifest is None:
+            return None
+        if day in set(manifest.option_partial_dates) or day in set(manifest.option_dates):
+            return "PARTIAL"
+        if day in set(manifest.option_unavailable_dates):
+            return "UNAVAILABLE"
+        return None
+
+    def mark_option_download_status(
+        self, provider: str, instrument_key: str, underlying: str, interval: int,
+        day: date, status: str,
+    ) -> None:
+        """Persist an option-download terminal state without overwriting raw-data state."""
+        manifest = self.get_manifest(provider, instrument_key, interval)
+        if manifest is None:
+            manifest = DatasetManifest(
+                dataset_id=f"{_safe(provider)}-{_safe(instrument_key)}-{interval}",
+                provider=provider, instrument_key=instrument_key, underlying=underlying,
+                interval_minutes=interval,
+                analysis_cadence_minutes=self.settings.default_analysis_cadence_minutes,
+                raw_schema_version=self.settings.raw_schema_version,
+                intelligence_schema_version=self.settings.intelligence_schema_version,
+                outcome_schema_version=self.settings.outcome_schema_version,
+                engine_version=self.settings.engine_version,
+            )
+        partial = set(manifest.option_partial_dates)
+        available = set(manifest.option_dates)
+        unavailable = set(manifest.option_unavailable_dates)
+        if status == "PARTIAL":
+            partial.add(day); available.add(day); unavailable.discard(day)
+        elif status == "UNAVAILABLE":
+            unavailable.add(day); partial.discard(day); available.discard(day)
+        else:
+            raise ValueError(f"unsupported option download status: {status}")
+        self.put_manifest(replace(
+            manifest, option_dates=tuple(sorted(available)),
+            option_partial_dates=tuple(sorted(partial)),
+            option_unavailable_dates=tuple(sorted(unavailable)),
+        ))
+
     def list_available_dates(self, provider: str, instrument_key: str, interval: int) -> tuple[date, ...]:
         manifest = self.get_manifest(provider, instrument_key, interval); return manifest.available_dates if manifest else ()
 
@@ -517,7 +564,7 @@ def _outcome_from_dict(value: Mapping[str, Any]) -> HistoricalOutcomeRecord:
 def _manifest_from_dict(value: Mapping[str, Any]) -> DatasetManifest:
     data = dict(value)
     for key in ("start_date", "end_date"): data[key] = date.fromisoformat(data[key]) if data.get(key) else None
-    for key in ("available_dates", "incomplete_dates", "failed_dates", "no_data_dates", "option_dates", "intelligence_dates", "outcome_dates"): data[key] = tuple(date.fromisoformat(v) for v in data.get(key, ()))
+    for key in ("available_dates", "incomplete_dates", "failed_dates", "no_data_dates", "option_dates", "option_partial_dates", "option_unavailable_dates", "intelligence_dates", "outcome_dates"): data[key] = tuple(date.fromisoformat(v) for v in data.get(key, ()))
     for key in ("last_ingested_at", "last_enriched_at"): data[key] = datetime.fromisoformat(data[key]) if data.get(key) else None
     for key in ("quality_flags", "explanations"): data[key] = tuple(data.get(key, ()))
     return DatasetManifest(**data)

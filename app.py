@@ -201,7 +201,9 @@ if workspace_mode is WorkspaceMode.HISTORICAL_ANALYTICS:
             historical_pipeline.lake.settings.engine_version),
         download_options=(None if historical_pipeline.option_service is None else
             lambda request: historical_pipeline.option_service.download(
-                request.instrument_key, request.start_date, request.end_date)),
+                request.instrument_key, request.start_date, request.end_date,
+                underlying=request.underlying, interval=request.interval_minutes,
+                force=request.rebuild_options)),
         index_status=pipeline_status,
     )
     render_historical_analytics_workspace(UNDERLYINGS, lake=historical_pipeline.lake,

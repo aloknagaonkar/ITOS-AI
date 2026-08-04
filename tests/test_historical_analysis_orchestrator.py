@@ -159,3 +159,23 @@ def test_oauth_token_is_not_logged_on_option_failure(tmp_path,caplog):
  pipeline(download_options=options,settings=settings)[0].run(request(start_date=D1,end_date=D1),run_id="secret")
  text=(tmp_path/date.today().isoformat()/"run_secret.log").read_text()
  assert "SECRET" not in text and "Bearer_SECRET" not in text
+
+def test_cached_option_statuses_are_mapped_without_blocking_intelligence():
+ existing=Result(expiries_discovered=0,contracts_discovered=0,contracts_stored=0,failed_contracts=0,
+  status="OPTION_DATA_EXISTING",skipped_dates=(D1,),partial_dates=(D1,))
+ previous_unavailable=Result(expiries_discovered=0,contracts_discovered=0,contracts_stored=0,failed_contracts=0,
+  status="OPTION_DATA_PREVIOUSLY_UNAVAILABLE",skipped_dates=(D2,))
+ def options(req): return existing if req.start_date==D1 else previous_unavailable
+ result=pipeline(download_options=options)[0].run(request())
+ rows={row.trading_date:row for row in result.progress.date_statuses}
+ assert rows[D1].options=="Existing" and rows[D1].final=="Ready"
+ assert rows[D2].options=="Previously Unavailable" and rows[D2].final=="Candle-only"
+
+def test_force_option_redownload_flag_reaches_range_request():
+ seen=[]
+ def options(req):
+  seen.append(req.rebuild_options)
+  return Result(expiries_discovered=0,contracts_discovered=0,contracts_stored=0,failed_contracts=0,
+   status="OPTION_DATA_UNAVAILABLE")
+ pipeline(download_options=options)[0].run(request(start_date=D1,end_date=D1,rebuild_historical_options=True))
+ assert seen==[True]

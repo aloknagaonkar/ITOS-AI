@@ -31,6 +31,7 @@ class HistoricalAnalysisRunRequest:
     underlying:str; instrument_key:str; start_date:date; end_date:date; interval_minutes:int=1
     analysis_cadence_minutes:int=5; include_historical_options:bool=True; download_missing_only:bool=True
     rebuild_intelligence:bool=False; rebuild_outcomes:bool=False; rebuild_index:bool=False
+    rebuild_historical_options:bool=False
     requested_at:datetime|None=None
     def validate(self,settings,supported,today=None):
         if self.underlying not in supported or supported[self.underlying]!=self.instrument_key: raise ValueError("The selected instrument is not supported.")
@@ -38,7 +39,8 @@ class HistoricalAnalysisRunRequest:
     def range_request(self,day=None):
         return HistoricalRangeRequest(self.underlying,self.instrument_key,day or self.start_date,day or self.end_date,self.interval_minutes,
             include_options=self.include_historical_options,rebuild_raw=not self.download_missing_only,
-            rebuild_intelligence=self.rebuild_intelligence,rebuild_outcomes=self.rebuild_outcomes)
+            rebuild_intelligence=self.rebuild_intelligence,rebuild_outcomes=self.rebuild_outcomes,
+            rebuild_options=self.rebuild_historical_options)
 
 @dataclass(frozen=True)
 class DatePipelineStatus:
@@ -163,7 +165,7 @@ class HistoricalAnalysisOrchestrator:
         def ready(row):
             if row.underlying in {"Provider No Data","Failed"} or row.intelligence=="Intelligence Failed": return "Retry Required"
             if row.intelligence=="Intelligence Complete" and row.outcomes in {"Outcomes Complete","Outcomes Not Evaluable","Outcomes Pending"}:
-                base="Ready" if row.options in {"Available","Partial"} else "Candle-only"
+                base="Ready" if row.options in {"Available","Partial","Existing"} else "Candle-only"
                 if row.index=="Index Failed": return f"{base} — Similarity unavailable"
                 if row.index in {"Index Pending","Not indexed"}: return "Partial"
                 return base
@@ -176,7 +178,7 @@ class HistoricalAnalysisOrchestrator:
             last_percent=max(last_percent,100.*done/max(1,total)); refreshed=tuple(replace(r,final=ready(r)) for r in rows)
             p=HistoricalPipelineProgress(run_id,status,stage.value,status,last_percent,100.*stage_done/max(1,stage_total),current,
                 str(current) if current else None,message,len(days),len(active),sum(r.underlying in {"Existing","Downloaded"} for r in rows),
-                len(active),sum(r.options in {"Available","Skipped","Unavailable","Failed Non-blocking"} for r in rows),sum(r.options=="Partial" for r in rows),
+                len(active),sum(r.options in {"Available","Existing","Skipped","Unavailable","Previously Unavailable","Failed Non-blocking"} for r in rows),sum(r.options=="Partial" for r in rows),
                 len(active),sum(r.intelligence=="Intelligence Complete" for r in rows),len(active),sum(r.outcomes in {"Outcomes Complete","Outcomes Not Evaluable"} for r in rows),
                 len(active),sum(r.index=="Indexed" for r in rows),sum(r.index=="Index Failed" for r in rows),index_outdated,
                 downloaded,stored,completed,partial,failed,skipped,refreshed,
@@ -223,7 +225,7 @@ class HistoricalAnalysisOrchestrator:
             for row in rows:
                 if row.trading_date not in active:continue
                 if stage is PipelineStage.DOWNLOAD_UNDERLYING and row.underlying in {"Existing","Downloaded"}:continue
-                if stage is PipelineStage.DOWNLOAD_OPTIONS and row.options in {"Available","Partial","Unavailable","Skipped","Failed Non-blocking"}:continue
+                if stage is PipelineStage.DOWNLOAD_OPTIONS and row.options in {"Available","Existing","Partial","Unavailable","Previously Unavailable","Skipped","Failed Non-blocking"} and not request.rebuild_historical_options:continue
                 if stage is PipelineStage.BUILD_INTELLIGENCE and (row.underlying not in {"Existing","Downloaded"} or (row.intelligence=="Intelligence Complete" and not request.rebuild_intelligence)):continue
                 if stage is PipelineStage.BUILD_OUTCOMES and (row.intelligence!="Intelligence Complete" or (row.outcomes in {"Outcomes Complete","Outcomes Not Evaluable"} and not request.rebuild_outcomes)):continue
                 if stage is PipelineStage.BUILD_INDEX and (row.intelligence!="Intelligence Complete" or (row.index=="Indexed" and not request.rebuild_index)):continue
@@ -274,11 +276,21 @@ class HistoricalAnalysisOrchestrator:
                         complete=_count(value,"contracts_stored"); failures=_count(value,"failed_contracts")
                         partial_dates=_dates(value,"partial_dates"); failed_dates=_dates(value,"failed_dates")
                         completed_dates=_dates(value,"completed_dates")
-                        option_status=("Partial" if day in partial_dates or (complete and failures) else
-                            "Available" if day in completed_dates or complete else "Unavailable")
-                        if day in failed_dates and not complete: option_status="Unavailable"
-                        update(day,options=option_status,explanation="Historical option candles evaluated")
-                        terminal="PARTIAL" if option_status=="Partial" else "COMPLETE" if option_status=="Available" else "UNAVAILABLE"
+                        result_status = str(getattr(value, "status", ""))
+                        if result_status == "OPTION_DATA_EXISTING":
+                            option_status = "Existing"
+                            explanation = "Existing historical option coverage reused"
+                        elif result_status == "OPTION_DATA_PREVIOUSLY_UNAVAILABLE":
+                            option_status = "Previously Unavailable"
+                            explanation = "Previously confirmed provider-unavailable option data reused"
+                        else:
+                            option_status=("Partial" if day in partial_dates or (complete and failures) else
+                                "Available" if day in completed_dates or complete else "Unavailable")
+                            if day in failed_dates and not complete: option_status="Unavailable"
+                            explanation = "Historical option candles evaluated"
+                        update(day,options=option_status,explanation=explanation)
+                        terminal=("PARTIAL" if option_status=="Partial" else "COMPLETE" if option_status in {"Available","Existing"}
+                            else "UNAVAILABLE")
                         observer.log("option request completed",date=day,expiries=option_stats[0],contracts=option_stats[1],
                             elapsed_seconds=f"{(datetime.now(timezone.utc)-operation_started).total_seconds():.3f}",reason=getattr(value,"status","OPTION_DATA_UNAVAILABLE"),final_status=terminal)
                     elif stage is PipelineStage.BUILD_INTELLIGENCE:
