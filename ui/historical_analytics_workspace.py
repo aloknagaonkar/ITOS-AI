@@ -4,7 +4,6 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, is_dataclass
 from datetime import date, timedelta
 from typing import Any, Callable, Mapping
-
 import pandas as pd
 import streamlit as st
 
@@ -374,7 +373,14 @@ def render_historical_analytics_workspace(underlyings: Mapping[str, str], *, pro
         rebuild_outcomes = st.checkbox("Rebuild outcomes", False, key="historical_simple_ui_rebuild_outcomes")
         rebuild_index = st.checkbox("Rebuild index", False, key="historical_simple_ui_rebuild_index")
         diagnostic_progress = st.session_state.get("historical_pipeline_progress_current")
-        render_pipeline_diagnostics(diagnostic_progress if isinstance(diagnostic_progress, HistoricalPipelineProgress) else None)
+        render_pipeline_diagnostics(
+            diagnostic_progress
+            if isinstance(diagnostic_progress, HistoricalPipelineProgress)
+            else None
+        )
+        diagnostic_error = st.session_state.get("historical_pipeline_start_error")
+        if diagnostic_error:
+            st.error(diagnostic_error)
     def make_orchestrator(run_request):
         def prepare(range_request):
             return service.analyze(HistoricalAnalyticsRequest(run_request.instrument_key,
@@ -409,6 +415,7 @@ def render_historical_analytics_workspace(underlyings: Mapping[str, str], *, pro
                 st.session_state["historical_pipeline_progress_current"] = value
                 presenter(value)
             run = orchestrator.run(run_request, progress_callback=report, run_id=run_id)
+            st.session_state.pop("historical_pipeline_start_error", None)
             st.session_state["historical_pipeline_run_active"] = run
             st.session_state["historical_pipeline_run_request"] = run_request
             st.session_state["historical_pipeline_results_current"] = run.analytics
@@ -422,9 +429,14 @@ def render_historical_analytics_workspace(underlyings: Mapping[str, str], *, pro
                 click_observer.stage_failed("BUTTON_CALLBACK", error); click_observer.close()
             st.error("Authentication required before historical data can be downloaded.")
         except Exception as error:
+            st.session_state["historical_pipeline_start_error"] = (
+                "Historical Analysis could not complete. "
+                "Review Pipeline Diagnostics and application logs."
+            )
             if click_observer._handler in click_observer.logger.handlers:
-                click_observer.stage_failed("BUTTON_CALLBACK", error); click_observer.close()
-            st.error("Historical Analysis could not start. Review Advanced Diagnostics.")
+                click_observer.stage_failed("BUTTON_CALLBACK", error)
+                click_observer.close()
+            st.error(st.session_state["historical_pipeline_start_error"])
     manager_request = HistoricalRangeRequest(underlying, instrument, start, end, interval, include_options=False)
     _developer_panel(lake, provider, manager_request, actions, sync_manager, cadence)
     progress = st.session_state.get("historical_pipeline_progress_current")

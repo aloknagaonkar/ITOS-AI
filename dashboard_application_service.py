@@ -168,6 +168,61 @@ class DashboardApplicationService:
 
         option_result = session_state.get("option_result")
         intelligence = session_state.get("intelligence")
+
+        if (
+            provider_snapshot is not None
+            and data_mode is DataMode.HISTORICAL_REPLAY
+            and not intelligence
+        ):
+            replay_candles = provider_snapshot.historical_candles
+            if isinstance(replay_candles, pd.DataFrame) and not replay_candles.empty:
+                price_result = evaluate_price_action(replay_candles)
+                intelligence = {
+                    "state": "Candle-only Replay",
+                    "score": float(price_result.get("score", 0.0) or 0.0),
+                    "confidence": 35.0,
+                    "bullish_probability": 50.0,
+                    "bearish_probability": 50.0,
+                    "agreement": False,
+                    "conflict": False,
+                    "no_trade": True,
+                    "no_trade_reasons": [
+                        "Historical option intelligence is unavailable."
+                    ],
+                    "action": "WAIT — candle-only historical replay",
+                    "evidence": list(price_result.get("reasons", ())),
+                    "risk_flags": ["OPTION_DATA_UNAVAILABLE"],
+                    "price": price_result,
+                }
+                session_state["intelligence"] = intelligence
+
+        if (
+            provider_snapshot is not None
+            and data_mode is DataMode.HISTORICAL_REPLAY
+            and not option_result
+        ):
+            warning = (
+                "Historical option data is unavailable at this replay timestamp. "
+                "ITOS generated candle-only intelligence and forced the recommendation to WAIT."
+            )
+            self.warning(warning)
+            recommendation = {
+                "side": "WAIT",
+                "confirmed": False,
+                "status": "WAIT — HISTORICAL OPTIONS UNAVAILABLE",
+                "confidence": 0.0,
+                "blockers": [warning],
+            }
+            return DashboardApplicationResult({
+                "data_unavailable": False,
+                "warning": warning,
+                "market_snapshot": provider_snapshot,
+                "replay_metadata": provider_snapshot.replay_metadata,
+                "option_result": {},
+                "intelligence": intelligence or {},
+                "recommendation": recommendation,
+            })
+
         if not option_result or not intelligence:
             raise DashboardDataUnavailable
 

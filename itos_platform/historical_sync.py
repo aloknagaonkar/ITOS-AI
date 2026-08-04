@@ -12,8 +12,8 @@ import pandas as pd
 from .market_lake import (
     DatasetManifest, HistoricalEnrichmentService, HistoricalIngestionService,
     HistoricalOutcomeService, HistoricalRangeRequest, IntelligenceQuery,
-    LocalHistoricalMarketLake, MarketLakeSettings, PeriodPreset, new_manifest,
-    resolve_period,
+    LocalHistoricalMarketLake, MarketLakeSettings, PeriodPreset, SyncResult,
+    new_manifest, resolve_period,
 )
 
 
@@ -301,16 +301,58 @@ class HistoricalSyncManager:
             end_date=max(available) if available else manifest.end_date,
             last_ingested_at=datetime.now(timezone.utc)))
 
-    def build_intelligence(self, request: HistoricalRangeRequest, *, runner: Callable[[Any], Any],
-                           cadence_minutes: int = 5, cancel: Callable[[], bool] = lambda: False):
-        days = [d for d in self.preview_plan(request, cadence_minutes=cadence_minutes).dates_to_enrich if not cancel()]
-        result = HistoricalEnrichmentService(self.market_lake, runner, provider=self.settings.historical_sync_provider).enrich(
-            request, days, cadence_minutes=cadence_minutes)
-        manifest = self.market_lake.get_manifest(self.settings.historical_sync_provider, request.instrument_key, request.interval_minutes)
+    def build_intelligence(
+        self,
+        request: HistoricalRangeRequest,
+        *,
+        runner: Callable[[Any], Any],
+        cadence_minutes: int = 5,
+        cancel: Callable[[], bool] = lambda: False,
+    ) -> SyncResult:
+        plan = self.preview_plan(request, cadence_minutes=cadence_minutes)
+        days = tuple(day for day in plan.dates_to_enrich if not cancel())
+
+        if not days:
+            already_enriched = tuple(
+                sorted(set(plan.complete_dates) - set(plan.dates_to_enrich))
+            )
+            return SyncResult(
+                completed_dates=(),
+                skipped_dates=already_enriched,
+                failed_dates=(),
+                no_data_dates=(),
+                failure_reasons=(),
+            )
+
+        result = HistoricalEnrichmentService(
+            self.market_lake,
+            runner,
+            provider=self.settings.historical_sync_provider,
+        ).enrich(
+            request,
+            days,
+            cadence_minutes=cadence_minutes,
+        )
+
+        manifest = self.market_lake.get_manifest(
+            self.settings.historical_sync_provider,
+            request.instrument_key,
+            request.interval_minutes,
+        )
         if manifest:
-            self.market_lake.put_manifest(replace(manifest,
-                intelligence_dates=tuple(sorted(set(manifest.intelligence_dates) | set(result.completed_dates))),
-                last_enriched_at=datetime.now(timezone.utc)))
+            self.market_lake.put_manifest(
+                replace(
+                    manifest,
+                    intelligence_dates=tuple(
+                        sorted(
+                            set(manifest.intelligence_dates)
+                            | set(result.completed_dates)
+                        )
+                    ),
+                    last_enriched_at=datetime.now(timezone.utc),
+                )
+            )
+
         return result
 
     def build_outcomes(self, request: HistoricalRangeRequest):
