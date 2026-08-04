@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 import inspect
 import logging
 import time
@@ -43,23 +43,94 @@ class HistoricalOptionDownloadService:
 
     def download(self, instrument_key: str, start_date: date, end_date: date) -> HistoricalOptionDownloadResult:
         if start_date > end_date: raise ValueError("start_date must be on or before end_date")
-        started=time.monotonic(); logger=logging.getLogger("historical_pipeline.options")
+        started=time.monotonic(); logger=logging.getLogger("historical_pipeline")
         logger.info("expiry discovery started date=%s", start_date)
         try: expiries = tuple(self._request("get_expired_option_expiries", instrument_key))
+        except TimeoutError as error:
+            logger.warning("expiry discovery timed out date=%s elapsed_seconds=%.3f final_status=UNAVAILABLE",
+                start_date,time.monotonic()-started)
+            return HistoricalOptionDownloadResult(0,0,0,0,"OPTION_DATA_UNAVAILABLE",(type(error).__name__,))
         except Exception as error:
             status=getattr(getattr(error,"response",None),"status_code",None)
             logger.warning("expiry discovery failed date=%s elapsed_seconds=%.3f reason=%s http_status=%s final_status=FAILED_NON_BLOCKING",
                 start_date,time.monotonic()-started,type(error).__name__,status if isinstance(status,int) else "unavailable")
             return HistoricalOptionDownloadResult(0,0,0,0,"OPTION_DATA_UNAVAILABLE",(type(error).__name__,))
-        logger.info("expiry discovery completed date=%s expiries=%d elapsed_seconds=%.3f",start_date,len(expiries),time.monotonic()-started)
+        logger.info("expiry discovery completed date=%s expiry_count=%d elapsed_seconds=%.3f",start_date,len(expiries),time.monotonic()-started)
         if not expiries:
             logger.info("option no-data date=%s reason=empty_expiry_discovery final_status=SKIPPED",start_date)
             return HistoricalOptionDownloadResult(0,0,0,0,"OPTION_DATA_UNAVAILABLE",("No historical option expiries were available.",))
-        discovered = stored = failed = 0
+
+        provider_expiry_count = len(expiries)
+        maximum_expiry = end_date + timedelta(days=90)
+        eligible_expiries = []
+        invalid_expiries = 0
         for expiry_text in expiries:
-            try: expiry = date.fromisoformat(str(expiry_text)); contracts = tuple(self._request("get_expired_option_contracts",instrument_key, expiry_text))
+            try:
+                expiry = date.fromisoformat(str(expiry_text))
+            except (TypeError, ValueError):
+                invalid_expiries += 1
+                continue
+            if start_date <= expiry <= maximum_expiry:
+                eligible_expiries.append(str(expiry_text))
+
+        expiries = tuple(eligible_expiries)
+        logger.info(
+            "expiry filtering completed date=%s provider_expiry_count=%d eligible_expiry_count=%d "
+            "invalid_expiry_count=%d maximum_expiry=%s skipped_expiry_count=%d",
+            start_date,
+            provider_expiry_count,
+            len(expiries),
+            invalid_expiries,
+            maximum_expiry,
+            provider_expiry_count - len(expiries),
+        )
+        if not expiries:
+            logger.info(
+                "option no-data date=%s reason=no_expiry_overlaps_requested_window "
+                "maximum_expiry=%s final_status=SKIPPED",
+                start_date,
+                maximum_expiry,
+            )
+            return HistoricalOptionDownloadResult(
+                0,
+                0,
+                0,
+                0,
+                "OPTION_DATA_UNAVAILABLE",
+                ("No historical option expiry overlapped the requested trading window.",),
+            )
+
+        discovered = stored = failed = 0
+        contract_counts: dict[str, int] = {}
+        empty_candle_responses = 0
+        successful_candle_responses = 0
+        contract_lookup_seconds = 0.0
+        candle_download_seconds = 0.0
+        storage_seconds = 0.0
+        for expiry_text in expiries:
+            logger.info("contract discovery started date=%s expiry=%s",start_date,expiry_text)
+            try:
+                expiry = date.fromisoformat(str(expiry_text))
+                contract_lookup_started = time.monotonic()
+                contracts = tuple(
+                    self._request(
+                        "get_expired_option_contracts",
+                        instrument_key,
+                        expiry_text,
+                    )
+                )
+                contract_lookup_seconds += time.monotonic() - contract_lookup_started
+                contract_counts[str(expiry_text)] = len(contracts)
             except (ValueError, TypeError): continue
-            except Exception: failed += 1; continue
+            except TimeoutError:
+                failed += 1
+                logger.warning("contract discovery timed out date=%s expiry=%s",start_date,expiry_text)
+                continue
+            except Exception:
+                failed += 1
+                logger.exception("contract discovery failed date=%s expiry=%s",start_date,expiry_text,exc_info=False)
+                continue
+            logger.info("contract discovery completed date=%s expiry=%s contract_count=%d",start_date,expiry_text,len(contracts))
             if not contracts:
                 logger.info("option no-data date=%s expiry=%s contracts=0 reason=no_contracts",start_date,expiry_text)
             for contract in contracts:
@@ -69,11 +140,24 @@ class HistoricalOptionDownloadService:
                 strike = contract.get("strike_price")
                 if not key or side not in {"CE", "PE"} or strike is None: failed += 1; continue
                 try:
-                    candles = normalize_historical_candles(self._request("get_expired_historical_candles",str(key), start_date.isoformat(), end_date.isoformat(), interval=1))
+                    logger.info("request started date=%s expiry=%s contract=%s",start_date,expiry_text,key)
+                    candle_request_started = time.monotonic()
+                    candles = normalize_historical_candles(
+                        self._request(
+                            "get_expired_historical_candles",
+                            str(key),
+                            start_date.isoformat(),
+                            end_date.isoformat(),
+                            interval=1,
+                        )
+                    )
+                    candle_download_seconds += time.monotonic() - candle_request_started
                     if candles.empty:
+                        empty_candle_responses += 1
                         failed += 1
                         logger.info("option no-data date=%s expiry=%s current_request=%s reason=provider_no_data",start_date,expiry_text,key)
                         continue
+                    successful_candle_responses += 1
                     for day, frame in candles.groupby(candles["timestamp"].dt.date):
                         records = [{"timestamp": row.timestamp.isoformat(), "expiry": expiry.isoformat(), "strike": strike,
                             "side": side, "open": row.open, "high": row.high, "low": row.low, "close": row.close,
@@ -81,9 +165,52 @@ class HistoricalOptionDownloadService:
                             "oi": row.open_interest if pd.notna(row.open_interest) else None,
                             "bid": None, "ask": None, "iv": None, "greeks": None,
                             "replay_completeness": "PARTIAL_OPTION_REPLAY"} for row in frame.itertuples()]
-                        self.lake.store_option_snapshots(self.provider, instrument_key, expiry, day, frame.iloc[-1]["timestamp"].to_pydatetime(), records)
+                        storage_started = time.monotonic()
+                        self.lake.store_option_snapshots(
+                            self.provider,
+                            instrument_key,
+                            expiry,
+                            day,
+                            frame.iloc[-1]["timestamp"].to_pydatetime(),
+                            records,
+                        )
+                        storage_seconds += time.monotonic() - storage_started
                     stored += 1
-                except (HistoricalMalformedResponseError, Exception): failed += 1
+                    logger.info("request completed date=%s expiry=%s contract=%s rows=%d",start_date,expiry_text,key,len(candles))
+                except TimeoutError:
+                    failed += 1
+                    logger.warning("request timed out date=%s expiry=%s contract=%s",start_date,expiry_text,key)
+                except HistoricalMalformedResponseError:
+                    failed += 1
+                    logger.warning("request failed date=%s expiry=%s contract=%s reason=malformed_response",start_date,expiry_text,key)
+                except Exception:
+                    failed += 1
+                    logger.exception("request failed date=%s expiry=%s contract=%s",start_date,expiry_text,key,exc_info=False)
+        logger.info(
+            "option runtime measurement "
+            "date=%s "
+            "expiry_count=%d "
+            "expiries=%s "
+            "contracts_per_expiry=%s "
+            "total_contracts=%d "
+            "successful_candle_responses=%d "
+            "empty_candle_responses=%d "
+            "contract_lookup_seconds=%.3f "
+            "candle_download_seconds=%.3f "
+            "storage_seconds=%.3f "
+            "total_elapsed_seconds=%.3f",
+            start_date,
+            len(expiries),
+            list(expiries),
+            contract_counts,
+            discovered,
+            successful_candle_responses,
+            empty_candle_responses,
+            contract_lookup_seconds,
+            candle_download_seconds,
+            storage_seconds,
+            time.monotonic() - started,
+        )
         status = "PARTIAL_OPTION_COVERAGE" if stored else "OPTION_DATA_UNAVAILABLE"
         logger.info("option download completed date=%s expiries=%d contracts=%d stored=%d failed=%d elapsed_seconds=%.3f final_status=%s",
             start_date,len(expiries),discovered,stored,failed,time.monotonic()-started,"PARTIAL" if stored else "FAILED_NON_BLOCKING")

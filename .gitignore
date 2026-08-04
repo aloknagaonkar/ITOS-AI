@@ -6,6 +6,7 @@ __pycache__/
 data/historical/
 data/market_lake/
 data/market_lake/index/
+*.db
 
 # Runtime historical pipeline diagnostics
 logs/historical/
