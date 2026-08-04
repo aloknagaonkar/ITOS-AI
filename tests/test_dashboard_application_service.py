@@ -639,15 +639,34 @@ def test_replay_without_provider_fails_before_live_acquisition_or_recommendation
     assert not any(event == ("client", "unused") for event in harness.events)
 
 
-def test_candle_only_replay_fails_safe_without_live_option_fabrication(harness):
-    provider = HistoricalReplayProvider(lambda _: pd.DataFrame([
-        {"timestamp": "2026-07-31 10:10", "open": 1, "high": 2, "low": 0, "close": 1}
-    ]))
-    with pytest.raises(DashboardDataUnavailable):
-        _execute_replay(harness, provider)
+def test_candle_only_replay_returns_safe_wait_without_live_option_fabrication(harness):
+    provider = HistoricalReplayProvider(
+        lambda _: pd.DataFrame([
+            {
+                "timestamp": "2026-07-31 10:10",
+                "open": 1,
+                "high": 2,
+                "low": 0,
+                "close": 1,
+            }
+        ])
+    )
+
+    result = _execute_replay(harness, provider)
     snapshot = provider.build_market_snapshot(request=_replay_request())
+
     assert snapshot.option_result == {}
     assert snapshot.replay_metadata.replay_completeness.value == "CANDLE_ONLY_REPLAY"
+
+    assert result.recommendation["side"] == "WAIT"
+    assert result.recommendation["confirmed"] is False
+    assert result.recommendation["status"].startswith("WAIT")
+
+    assert result.intelligence["state"] == "Candle-only Replay"
+    assert result.intelligence["no_trade"] is True
+    assert "OPTION_DATA_UNAVAILABLE" in result.intelligence["risk_flags"]
+
+    assert result.option_result == {}
     assert "build_recommendation" not in harness.events
 
 
