@@ -239,10 +239,26 @@ class HistoricalAnalysisOrchestrator:
                 operation_started=datetime.now(timezone.utc)
                 try:
                     if stage is PipelineStage.DOWNLOAD_OPTIONS:
-                        observer.log("option request",date=day,current_request="historical option enrichment")
+                        observer.log(
+                            "option request",
+                            date=day,
+                            current_request="historical option enrichment",
+                        )
+                        observer.log(
+                            "calling download_options",
+                            date=day,
+                        )
                     elif stage is PipelineStage.BUILD_INTELLIGENCE:
                         observer.log("BUILD_INTELLIGENCE started", date=day)
-                    value=self._invoke(stage,request,day)
+
+                    value = self._invoke(stage, request, day)
+
+                    if stage is PipelineStage.DOWNLOAD_OPTIONS:
+                        observer.log(
+                            "returned from download_options",
+                            date=day,
+                            result_type=type(value).__name__ if value is not None else "None",
+                        )
                     if stage is PipelineStage.DOWNLOAD_UNDERLYING:
                         downloaded+=_count(value,"downloaded_row_count"); stored+=_count(value,"stored_row_count")
                         if day in _dates(value,"completed_dates"):update(day,underlying="Downloaded",session="CONFIRMED_TRADING_SESSION",explanation="Underlying candles downloaded")
