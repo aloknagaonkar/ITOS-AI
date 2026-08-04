@@ -217,8 +217,9 @@ def pipeline_stage_rows(progress: HistoricalPipelineProgress) -> tuple[Mapping[s
         if stage is PipelineStage.DOWNLOAD_OPTIONS and statuses:
             terminal = statuses - {"Pending", "Waiting"}
             status = ("Failed Non-blocking" if "Failed Non-blocking" in terminal else "Partial" if "Partial" in terminal
+                else "Previously Unavailable" if "Previously Unavailable" in terminal
                 else "Unavailable" if "Unavailable" in terminal else "Skipped" if terminal == {"Skipped"}
-                else "Complete" if terminal == {"Available"} else "Running")
+                else "Complete" if terminal <= {"Available", "Existing"} else "Running")
         elif STAGE_ORDER[stage] < current or (total and complete >= total): status = "Complete"
         elif STAGE_ORDER[stage] == current: status = "Running"
         else: status = "Waiting"
@@ -361,7 +362,7 @@ def render_historical_analytics_workspace(underlyings: Mapping[str, str], *, pro
     start = row[1].date_input("From Date", date.today()-timedelta(days=7), key="historical_simple_ui_from_date")
     end = row[2].date_input("To Date", date.today(), key="historical_simple_ui_to_date")
     instrument, interval, cadence = underlyings[underlying], 1, 5
-    include_options, rebuild_intel, rebuild_outcomes, rebuild_index = True, False, False, False
+    include_options, rebuild_intel, rebuild_outcomes, rebuild_index, rebuild_options = True, False, False, False, False
     with st.expander("Advanced Developer Controls", expanded=False):
         instrument = st.text_input("Instrument key", instrument, key="historical_simple_ui_instrument_key")
         advanced = st.columns(3)
@@ -372,6 +373,11 @@ def render_historical_analytics_workspace(underlyings: Mapping[str, str], *, pro
         rebuild_intel = st.checkbox("Rebuild intelligence", False, key="historical_simple_ui_rebuild_intelligence")
         rebuild_outcomes = st.checkbox("Rebuild outcomes", False, key="historical_simple_ui_rebuild_outcomes")
         rebuild_index = st.checkbox("Rebuild index", False, key="historical_simple_ui_rebuild_index")
+        rebuild_options = st.checkbox(
+            "Force re-download historical options", False,
+            key="historical_simple_ui_rebuild_options",
+            help="Ignore durable option coverage status and call the provider again.",
+        )
         diagnostic_progress = st.session_state.get("historical_pipeline_progress_current")
         render_pipeline_diagnostics(
             diagnostic_progress
@@ -401,8 +407,17 @@ def render_historical_analytics_workspace(underlyings: Mapping[str, str], *, pro
             stall_threshold_seconds=settings.stall_threshold_seconds)
         click_observer.log("Download & Analyze clicked")
         try:
-            run_request = HistoricalAnalysisRunRequest(underlying, instrument, start, end, interval, cadence,
-                include_options, True, rebuild_intel, rebuild_outcomes, rebuild_index)
+            run_request = HistoricalAnalysisRunRequest(
+                underlying=underlying, instrument_key=instrument,
+                start_date=start, end_date=end, interval_minutes=interval,
+                analysis_cadence_minutes=cadence,
+                include_historical_options=include_options,
+                download_missing_only=True,
+                rebuild_intelligence=rebuild_intel,
+                rebuild_outcomes=rebuild_outcomes,
+                rebuild_index=rebuild_index,
+                rebuild_historical_options=rebuild_options,
+            )
             click_observer.log("request built", underlying=underlying, start_date=start, end_date=end,
                 interval_minutes=interval, include_options=include_options)
             click_observer.close()
@@ -437,7 +452,10 @@ def render_historical_analytics_workspace(underlyings: Mapping[str, str], *, pro
                 click_observer.stage_failed("BUTTON_CALLBACK", error)
                 click_observer.close()
             st.error(st.session_state["historical_pipeline_start_error"])
-    manager_request = HistoricalRangeRequest(underlying, instrument, start, end, interval, include_options=False)
+    manager_request = HistoricalRangeRequest(
+        underlying, instrument, start, end, interval,
+        include_options=False, rebuild_options=rebuild_options,
+    )
     _developer_panel(lake, provider, manager_request, actions, sync_manager, cadence)
     progress = st.session_state.get("historical_pipeline_progress_current")
     if isinstance(progress, HistoricalPipelineProgress): render_pipeline_progress(progress)

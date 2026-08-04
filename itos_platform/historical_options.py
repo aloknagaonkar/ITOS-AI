@@ -24,6 +24,10 @@ class ExpiredOptionClient(Protocol):
 class HistoricalOptionDownloadResult:
     expiries_discovered: int; contracts_discovered: int; contracts_stored: int
     failed_contracts: int; status: str; explanations: tuple[str, ...] = ()
+    completed_dates: tuple[date, ...] = ()
+    skipped_dates: tuple[date, ...] = ()
+    partial_dates: tuple[date, ...] = ()
+    failed_dates: tuple[date, ...] = ()
 
 
 class HistoricalOptionDownloadService:
@@ -41,9 +45,34 @@ class HistoricalOptionDownloadService:
             kwargs["timeout"] = self.request_timeout_seconds
         return method(*args, **kwargs)
 
-    def download(self, instrument_key: str, start_date: date, end_date: date) -> HistoricalOptionDownloadResult:
+    def download(
+        self, instrument_key: str, start_date: date, end_date: date, *,
+        underlying: str | None = None, interval: int = 1, force: bool = False,
+    ) -> HistoricalOptionDownloadResult:
         if start_date > end_date: raise ValueError("start_date must be on or before end_date")
         started=time.monotonic(); logger=logging.getLogger("historical_pipeline")
+        requested_days = tuple(
+            date.fromordinal(value)
+            for value in range(start_date.toordinal(), end_date.toordinal() + 1)
+        )
+        if not force:
+            states = {
+                day: self.lake.option_download_status(self.provider, instrument_key, interval, day)
+                for day in requested_days
+            }
+            if states and all(state in {"PARTIAL", "UNAVAILABLE"} for state in states.values()):
+                partial = tuple(day for day, state in states.items() if state == "PARTIAL")
+                unavailable = tuple(day for day, state in states.items() if state == "UNAVAILABLE")
+                status = "OPTION_DATA_EXISTING" if partial else "OPTION_DATA_PREVIOUSLY_UNAVAILABLE"
+                logger.info(
+                    "option download skipped start_date=%s end_date=%s status=%s partial_dates=%s unavailable_dates=%s",
+                    start_date, end_date, status, list(partial), list(unavailable),
+                )
+                return HistoricalOptionDownloadResult(
+                    0, 0, 0, 0, status,
+                    ("Historical option download reused durable Market Lake status.",),
+                    skipped_dates=requested_days, partial_dates=partial,
+                )
         logger.info("expiry discovery started date=%s", start_date)
         try: expiries = tuple(self._request("get_expired_option_expiries", instrument_key))
         except TimeoutError as error:
@@ -58,7 +87,9 @@ class HistoricalOptionDownloadService:
         logger.info("expiry discovery completed date=%s expiry_count=%d elapsed_seconds=%.3f",start_date,len(expiries),time.monotonic()-started)
         if not expiries:
             logger.info("option no-data date=%s reason=empty_expiry_discovery final_status=SKIPPED",start_date)
-            return HistoricalOptionDownloadResult(0,0,0,0,"OPTION_DATA_UNAVAILABLE",("No historical option expiries were available.",))
+            result = HistoricalOptionDownloadResult(0,0,0,0,"OPTION_DATA_UNAVAILABLE",("No historical option expiries were available.",), skipped_dates=requested_days)
+            for day in requested_days: self.lake.mark_option_download_status(self.provider, instrument_key, underlying or instrument_key, interval, day, "UNAVAILABLE")
+            return result
 
         provider_expiry_count = len(expiries)
         maximum_expiry = end_date + timedelta(days=90)
@@ -91,14 +122,16 @@ class HistoricalOptionDownloadService:
                 start_date,
                 maximum_expiry,
             )
-            return HistoricalOptionDownloadResult(
-                0,
-                0,
-                0,
-                0,
-                "OPTION_DATA_UNAVAILABLE",
+            result = HistoricalOptionDownloadResult(
+                0, 0, 0, 0, "OPTION_DATA_UNAVAILABLE",
                 ("No historical option expiry overlapped the requested trading window.",),
+                skipped_dates=requested_days,
             )
+            for day in requested_days:
+                self.lake.mark_option_download_status(
+                    self.provider, instrument_key, underlying or instrument_key, interval, day, "UNAVAILABLE"
+                )
+            return result
 
         discovered = stored = failed = 0
         contract_counts: dict[str, int] = {}
@@ -214,8 +247,33 @@ class HistoricalOptionDownloadService:
         status = "PARTIAL_OPTION_COVERAGE" if stored else "OPTION_DATA_UNAVAILABLE"
         logger.info("option download completed date=%s expiries=%d contracts=%d stored=%d failed=%d elapsed_seconds=%.3f final_status=%s",
             start_date,len(expiries),discovered,stored,failed,time.monotonic()-started,"PARTIAL" if stored else "FAILED_NON_BLOCKING")
-        return HistoricalOptionDownloadResult(len(expiries), discovered, stored, failed, status,
-            ("Expired candles do not provide historical bid/ask, IV, or Greeks.",))
+        partial_days = tuple(sorted({day for day in requested_days if self.lake.option_download_status(
+            self.provider, instrument_key, interval, day
+        ) == "PARTIAL"}))
+        if stored:
+            for day in requested_days:
+                if self.lake.option_download_status(self.provider, instrument_key, interval, day) is None:
+                    self.lake.mark_option_download_status(
+                        self.provider, instrument_key, underlying or instrument_key, interval, day, "PARTIAL"
+                    )
+            partial_days = requested_days
+        elif not successful_candle_responses and (failed == 0 or (
+            discovered and empty_candle_responses and failed == empty_candle_responses
+        )):
+            for day in requested_days:
+                self.lake.mark_option_download_status(
+                    self.provider, instrument_key, underlying or instrument_key, interval, day, "UNAVAILABLE"
+                )
+        return HistoricalOptionDownloadResult(
+            len(expiries), discovered, stored, failed, status,
+            ("Expired candles do not provide historical bid/ask, IV, or Greeks.",),
+            completed_dates=requested_days if stored else (),
+            partial_dates=partial_days if stored else (),
+            skipped_dates=requested_days if (not stored and not successful_candle_responses and (
+                failed == 0 or (discovered and empty_candle_responses and failed == empty_candle_responses)
+            )) else (),
+            failed_dates=requested_days if (not stored and failed and failed != empty_candle_responses) else (),
+        )
 
 
 def derive_historical_option_chain(records: Sequence[Mapping[str, Any]]) -> pd.DataFrame:
