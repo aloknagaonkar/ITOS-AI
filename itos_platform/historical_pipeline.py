@@ -69,6 +69,13 @@ class HistoricalPipelineComposition:
             request.interval_minutes, engine_version=self.lake.settings.engine_version,
         ))
 
+    def intelligence_artifact_current(self, request, *, cadence_minutes=5):
+        return self.lake.intelligence_artifact_current(
+            self.runner.provider_name, request.instrument_key,
+            request.interval_minutes, request.start_date,
+            cadence_minutes=cadence_minutes,
+        )
+
     def build_intelligence(self, request, *, cadence_minutes=5):
         return self.sync_manager.build_intelligence(
             request, runner=self.runner, cadence_minutes=cadence_minutes,

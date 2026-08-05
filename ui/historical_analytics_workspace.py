@@ -48,6 +48,7 @@ class MarketLakeActions:
     finalize_today: Callable[[HistoricalRangeRequest], object] | None = None
     download_options: Callable[[HistoricalRangeRequest], object] | None = None
     index_status: Callable[[HistoricalRangeRequest], object] | None = None
+    intelligence_artifact_current: Callable[..., bool] | None = None
 
 
 def _option(label: str) -> str | None:
@@ -407,7 +408,9 @@ def render_historical_analytics_workspace(underlyings: Mapping[str, str], *, pro
                 run_request.interval_minutes))
         return HistoricalAnalysisOrchestrator(
             sync_underlying=(sync_manager.sync_missing_raw if sync_manager else actions.sync_missing_data),
-            download_options=actions.download_options, build_intelligence=actions.build_intelligence,
+            download_options=actions.download_options,
+            build_intelligence=actions.build_intelligence,
+            intelligence_artifact_current=actions.intelligence_artifact_current,
             build_outcomes=actions.build_outcomes, build_index=actions.build_index,
             prepare_analytics=prepare, checkpoint_store=JsonRunCheckpointStore(lake.root / "runs"),
             settings=settings, should_cancel=lambda: bool(

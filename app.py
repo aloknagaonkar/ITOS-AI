@@ -192,6 +192,7 @@ if workspace_mode is WorkspaceMode.HISTORICAL_ANALYTICS:
     actions = MarketLakeActions(
         build_intelligence=lambda request, cadence_minutes=5: historical_pipeline.build_intelligence(
             request, cadence_minutes=cadence_minutes),
+        intelligence_artifact_current=historical_pipeline.intelligence_artifact_current,
         build_outcomes=historical_pipeline.build_outcomes,
         build_index=historical_pipeline.build_index,
         validate_index=historical_pipeline.validate_index,

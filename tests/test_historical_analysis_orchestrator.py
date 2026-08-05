@@ -20,10 +20,21 @@ def pipeline(tmp_path=None,**overrides):
  calls=[]
  def sync(req): calls.append(("raw",req.start_date)); return raw(req.start_date)
  def options(req): calls.append(("options",req.start_date)); return Result(expiries_discovered=1,contracts_discovered=4,contracts_stored=4,failed_contracts=0,status="FULL")
- def intel(req,cadence_minutes=5): calls.append(("intel",req.start_date,cadence_minutes)); return intelligence(req.start_date)
+ class IntelligenceOperation:
+  def __init__(self): self.current_dates=set(overrides.pop("intelligence_current_dates", ()))
+  def intelligence_artifact_current(self, req, *, cadence_minutes=5):
+   return req.start_date in self.current_dates
+  def build_intelligence(self, req, cadence_minutes=5):
+   calls.append(("intel",req.start_date,cadence_minutes)); return intelligence(req.start_date)
+ intelligence_owner=IntelligenceOperation()
+ intel=intelligence_owner.build_intelligence
+ explicit_checker = overrides.pop("intelligence_artifact_current", None)
+ if explicit_checker is None:
+  explicit_checker = intelligence_owner.intelligence_artifact_current
  def outcomes(req): calls.append(("outcome",req.start_date)); return (Result(status="FAVOURABLE"),)
  def index(req): calls.append(("index",req.start_date)); return Result(completed=1,skipped=0,failed=0)
- args=dict(sync_underlying=sync,download_options=options,build_intelligence=intel,build_outcomes=outcomes,
+ args=dict(sync_underlying=sync,download_options=options,build_intelligence=intel,
+  intelligence_artifact_current=explicit_checker,build_outcomes=outcomes,
   build_index=index,prepare_analytics=lambda req:{"ready":True},checkpoint_store=JsonRunCheckpointStore(tmp_path) if tmp_path else None)
  args.update(overrides); return HistoricalAnalysisOrchestrator(**args),calls
 
@@ -179,3 +190,34 @@ def test_force_option_redownload_flag_reaches_range_request():
    status="OPTION_DATA_UNAVAILABLE")
  pipeline(download_options=options)[0].run(request(start_date=D1,end_date=D1,rebuild_historical_options=True))
  assert seen==[True]
+
+
+def test_current_intelligence_artifact_is_reused_without_replay():
+ orch,calls=pipeline(intelligence_current_dates=(D1,))
+ result=orch.run(request(start_date=D1,end_date=D1))
+ row=result.progress.date_statuses[0]
+ assert row.intelligence=="Intelligence Existing"
+ assert not any(call[0]=="intel" for call in calls)
+ assert any(call[0]=="outcome" for call in calls)
+ assert any(call[0]=="index" for call in calls)
+ assert result.progress.intelligence_complete==1
+
+def test_explicit_intelligence_artifact_checker_supports_wrapped_builder():
+ calls=[]
+ def wrapped_builder(req, cadence_minutes=5):
+  calls.append(("intel", req.start_date, cadence_minutes))
+  return intelligence(req.start_date)
+ orch,_=pipeline(
+  build_intelligence=wrapped_builder,
+  intelligence_artifact_current=lambda req, cadence_minutes=5: req.start_date == D1,
+ )
+ result=orch.run(request(start_date=D1,end_date=D1))
+ assert result.progress.date_statuses[0].intelligence=="Intelligence Existing"
+ assert calls==[]
+
+
+def test_rebuild_intelligence_overrides_current_artifact_reuse():
+ orch,calls=pipeline(intelligence_current_dates=(D1,))
+ result=orch.run(request(start_date=D1,end_date=D1,rebuild_intelligence=True))
+ assert result.progress.date_statuses[0].intelligence=="Intelligence Complete"
+ assert any(call[0]=="intel" for call in calls)
