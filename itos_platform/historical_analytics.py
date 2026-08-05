@@ -251,9 +251,44 @@ class HistoricalAnalyticsService:
         denominator = len(expected)
         confidence = _numbers([record.decision_confidence for record in records])
         compression_scores = _numbers([_value(record.values, "compression_intelligence.score", "compression.score") for record in records])
-        regimes = [_value(record.values, "market_regime.regime", "regime", default=record.market_bias) for record in records]
-        cycles = [_value(record.values, "market_cycle.cycle", "cycle") for record in records]
-        biases = [_value(record.values, "institutional_evidence.bias", "institutional_bias", default=record.market_bias) for record in records]
+        regimes = [
+            _value(
+                record.values,
+                "market_regime.regime",
+                "market_regime.state",
+                "intelligence.market_regime.regime",
+                "intelligence.market_regime.state",
+                "intelligence.regime",
+                "regime",
+                default=record.market_bias,
+            )
+            for record in records
+        ]
+        cycles = [
+            _value(
+                record.values,
+                "market_cycle.cycle",
+                "market_cycle.phase",
+                "market_cycle.state",
+                "intelligence.market_cycle.cycle",
+                "intelligence.market_cycle.phase",
+                "intelligence.market_cycle.state",
+                "cycle",
+            )
+            for record in records
+        ]
+        biases = [
+            _value(
+                record.values,
+                "institutional_evidence.bias",
+                "intelligence.institutional_evidence.bias",
+                "intelligence.institutional_bias",
+                "intelligence.market_bias",
+                "institutional_bias",
+                default=record.market_bias,
+            )
+            for record in records
+        ]
         positioning = [record.positioning_state for record in records]
         compression_states = [record.compression_state for record in records]
         manipulation_states = [record.manipulation_state for record in records]

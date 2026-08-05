@@ -653,22 +653,104 @@ def serialize_dashboard_result(result: Any, request: ReplayRequest, provider: st
     metadata = values.get("replay_metadata") or _field(values.get("market_snapshot"), "replay_metadata")
     cutoff = _field(metadata, "data_cutoff_timestamp") or request.replay_timestamp
     latest = _field(metadata, "latest_candle_timestamp") or cutoff
-    if normalize_timestamp(latest) > normalize_timestamp(cutoff): raise ValueError("NO_LOOK_AHEAD_VIOLATION")
-    recommendation = values.get("recommendation") or {}; confidence = values.get("decision_confidence")
-    ranking = values.get("trade_opportunity_ranking"); compression = values.get("compression_intelligence")
-    positioning = values.get("positioning_intelligence"); manipulation = values.get("manipulation_intelligence")
+    if normalize_timestamp(latest) > normalize_timestamp(cutoff):
+        raise ValueError("NO_LOOK_AHEAD_VIOLATION")
+
+    recommendation = values.get("recommendation") or {}
+    confidence = values.get("decision_confidence")
+    ranking = values.get("trade_opportunity_ranking")
+    compression = values.get("compression_intelligence")
+    positioning = values.get("positioning_intelligence")
+    manipulation = values.get("manipulation_intelligence")
+
     serial = _json_value(values, exclude_runtime_keys=True)
-    if not isinstance(serial, dict): raise TypeError("dashboard result did not produce a JSON object")
-    return HistoricalIntelligenceRecord(provider, request.instrument_key, request.underlying, request.interval_minutes,
-        request.trading_date, request.replay_timestamp, normalize_timestamp(cutoff).to_pydatetime(), normalize_timestamp(latest).to_pydatetime(),
-        settings.engine_version, settings.intelligence_schema_version, getattr(_field(metadata, "replay_completeness", "UNAVAILABLE"), "value", _field(metadata, "replay_completeness", "UNAVAILABLE")),
-        recommendation=str(recommendation.get("side", "WAIT")) if isinstance(recommendation, Mapping) else str(recommendation),
-        recommendation_confidence=recommendation.get("confidence") if isinstance(recommendation, Mapping) else None,
-        decision_confidence=getattr(confidence, "score", confidence if isinstance(confidence, (int, float)) else None),
-        decision_confidence_grade=getattr(confidence, "grade", None), market_bias=serial.get("market_bias"),
-        positioning_state=getattr(positioning, "state", None), compression_state=getattr(compression, "state", None),
-        manipulation_state=getattr(manipulation, "state", None), ranking_eligibility=bool(getattr(ranking, "eligible", False)),
-        quality_flags=tuple(_field(metadata, "quality_flags", ())), blockers=tuple(recommendation.get("blockers", ())) if isinstance(recommendation, Mapping) else (), values=serial)
+    if not isinstance(serial, dict):
+        raise TypeError("dashboard result did not produce a JSON object")
+
+    serialized_intelligence = serial.get("intelligence")
+    if not isinstance(serialized_intelligence, Mapping):
+        serialized_intelligence = {}
+
+    # Candle-only replay returns a compact intelligence object rather than the
+    # full option-backed Decision Pipeline result. Preserve its factual price
+    # score and confidence in the typed record so Historical Analytics can
+    # aggregate it instead of treating every point as unavailable/neutral.
+    nested_confidence = serialized_intelligence.get("confidence")
+    decision_confidence = getattr(
+        confidence,
+        "score",
+        confidence if isinstance(confidence, (int, float)) else nested_confidence,
+    )
+    decision_grade = getattr(confidence, "grade", None)
+
+    market_bias = serial.get("market_bias")
+    if not market_bias:
+        market_bias = (
+            serialized_intelligence.get("market_bias")
+            or serialized_intelligence.get("institutional_bias")
+            or serialized_intelligence.get("bias")
+        )
+    if not market_bias:
+        price_score = serialized_intelligence.get("score")
+        try:
+            numeric_score = float(price_score)
+        except (TypeError, ValueError):
+            numeric_score = 0.0
+        if numeric_score > 0:
+            market_bias = "BULLISH"
+        elif numeric_score < 0:
+            market_bias = "BEARISH"
+        elif price_score is not None:
+            market_bias = "NEUTRAL"
+
+    replay_completeness = getattr(
+        _field(metadata, "replay_completeness", "UNAVAILABLE"),
+        "value",
+        _field(metadata, "replay_completeness", "UNAVAILABLE"),
+    )
+
+    return HistoricalIntelligenceRecord(
+        provider,
+        request.instrument_key,
+        request.underlying,
+        request.interval_minutes,
+        request.trading_date,
+        request.replay_timestamp,
+        normalize_timestamp(cutoff).to_pydatetime(),
+        normalize_timestamp(latest).to_pydatetime(),
+        settings.engine_version,
+        settings.intelligence_schema_version,
+        replay_completeness,
+        recommendation=(
+            str(recommendation.get("side", "WAIT"))
+            if isinstance(recommendation, Mapping)
+            else str(recommendation)
+        ),
+        recommendation_confidence=(
+            recommendation.get("confidence")
+            if isinstance(recommendation, Mapping)
+            else None
+        ),
+        decision_confidence=decision_confidence,
+        decision_confidence_grade=decision_grade,
+        market_bias=market_bias,
+        positioning_state=getattr(positioning, "state", None),
+        compression_state=getattr(compression, "state", None),
+        manipulation_state=getattr(manipulation, "state", None),
+        ranking_eligibility=bool(getattr(ranking, "eligible", False)),
+        quality_flags=tuple(_field(metadata, "quality_flags", ())),
+        blockers=(
+            tuple(recommendation.get("blockers", ()))
+            if isinstance(recommendation, Mapping)
+            else ()
+        ),
+        missing_confirmations=(
+            tuple(recommendation.get("missing_confirmations", ()))
+            if isinstance(recommendation, Mapping)
+            else ()
+        ),
+        values=serial,
+    )
 
 
 class HistoricalOutcomeService:
