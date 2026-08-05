@@ -31,11 +31,14 @@ def pipeline(tmp_path=None,**overrides):
  explicit_checker = overrides.pop("intelligence_artifact_current", None)
  if explicit_checker is None:
   explicit_checker = intelligence_owner.intelligence_artifact_current
+ outcome_current_dates=set(overrides.pop("outcome_current_dates", ()))
  def outcomes(req): calls.append(("outcome",req.start_date)); return (Result(status="FAVOURABLE"),)
+ def outcome_checker(req): return req.start_date in outcome_current_dates
+ explicit_outcome_checker=overrides.pop("outcome_artifact_current", outcome_checker)
  def index(req): calls.append(("index",req.start_date)); return Result(completed=1,skipped=0,failed=0)
  args=dict(sync_underlying=sync,download_options=options,build_intelligence=intel,
   intelligence_artifact_current=explicit_checker,build_outcomes=outcomes,
-  build_index=index,prepare_analytics=lambda req:{"ready":True},checkpoint_store=JsonRunCheckpointStore(tmp_path) if tmp_path else None)
+  outcome_artifact_current=explicit_outcome_checker,build_index=index,prepare_analytics=lambda req:{"ready":True},checkpoint_store=JsonRunCheckpointStore(tmp_path) if tmp_path else None)
  args.update(overrides); return HistoricalAnalysisOrchestrator(**args),calls
 
 def test_validation():
@@ -201,6 +204,23 @@ def test_current_intelligence_artifact_is_reused_without_replay():
  assert any(call[0]=="outcome" for call in calls)
  assert any(call[0]=="index" for call in calls)
  assert result.progress.intelligence_complete==1
+
+def test_current_outcome_artifact_is_reused_without_rebuild():
+ orch,calls=pipeline(intelligence_current_dates=(D1,), outcome_current_dates=(D1,))
+ result=orch.run(request(start_date=D1,end_date=D1))
+ row=result.progress.date_statuses[0]
+ assert row.intelligence=="Intelligence Existing"
+ assert row.outcomes=="Outcomes Existing"
+ assert not any(call[0]=="outcome" for call in calls)
+ assert any(call[0]=="index" for call in calls)
+ assert result.progress.outcome_complete==1
+
+def test_rebuild_outcomes_overrides_current_artifact_reuse():
+ orch,calls=pipeline(intelligence_current_dates=(D1,), outcome_current_dates=(D1,))
+ result=orch.run(request(start_date=D1,end_date=D1,rebuild_outcomes=True))
+ assert result.progress.date_statuses[0].outcomes=="Outcomes Complete"
+ assert any(call[0]=="outcome" for call in calls)
+
 
 def test_explicit_intelligence_artifact_checker_supports_wrapped_builder():
  calls=[]

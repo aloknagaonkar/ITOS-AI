@@ -253,6 +253,7 @@ class HistoricalMarketLake(Protocol):
     def query_intelligence(self, query: IntelligenceQuery) -> tuple[HistoricalIntelligenceRecord, ...]: ...
     def store_outcomes(self, records: Sequence[HistoricalOutcomeRecord]) -> None: ...
     def query_outcomes(self, instrument_key: str, start_date: date, end_date: date, engine_version: str) -> tuple[HistoricalOutcomeRecord, ...]: ...
+    def outcome_artifact_current(self, instrument_key: str, interval: int, day: date) -> bool: ...
     def get_manifest(self, provider: str, instrument_key: str, interval: int) -> DatasetManifest | None: ...
 
 
@@ -516,6 +517,39 @@ class LocalHistoricalMarketLake:
             while day <= end_date:
                 result.extend(self._read_outcomes(interval / f"{day}.json")); day += timedelta(days=1)
         return tuple(result)
+
+    def outcome_artifact_current(
+        self, instrument_key: str, interval: int, day: date,
+    ) -> bool:
+        """Return True when every current intelligence record has an outcome.
+
+        The normal read paths enforce the configured intelligence engine and
+        outcome schema versions. Matching by intelligence record ID prevents
+        stale outcomes from being reused after intelligence is regenerated.
+        """
+        intelligence_records = self.query_intelligence(IntelligenceQuery(
+            instrument_key, day, day, interval,
+            engine_version=self.settings.engine_version,
+        ))
+        if not intelligence_records:
+            return False
+
+        outcome_path = self._records_path(
+            "outcomes", self.settings.engine_version, instrument_key, interval, day
+        )
+        outcomes = self._read_outcomes(outcome_path)
+        if not outcomes:
+            return False
+
+        expected_ids = {record.record_id for record in intelligence_records}
+        actual_ids = {
+            record.intelligence_record_id
+            for record in outcomes
+            if record.engine_version == self.settings.engine_version
+            and record.interval_minutes == interval
+            and record.trading_date == day
+        }
+        return expected_ids.issubset(actual_ids)
 
     def _manifest_path(self, provider: str, instrument: str, interval: int) -> Path:
         return self.root / "manifest" / _safe(provider) / _safe(instrument) / str(interval) / self.settings.manifest_filename

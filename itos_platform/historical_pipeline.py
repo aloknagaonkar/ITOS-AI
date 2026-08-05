@@ -81,6 +81,11 @@ class HistoricalPipelineComposition:
             request, runner=self.runner, cadence_minutes=cadence_minutes,
         )
 
+    def outcome_artifact_current(self, request):
+        return self.lake.outcome_artifact_current(
+            request.instrument_key, request.interval_minutes, request.start_date
+        )
+
     def build_outcomes(self, request):
         return self.sync_manager.build_outcomes(request)
 

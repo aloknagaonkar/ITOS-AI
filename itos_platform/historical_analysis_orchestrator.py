@@ -126,7 +126,7 @@ class HistoricalAnalysisOrchestrator:
     """Per-date coordinator which maps actual service results into durable state."""
     def __init__(self,*,sync_underlying,download_options=None,build_intelligence=None,
                  intelligence_artifact_current=None,build_outcomes=None,
-                 build_index=None,prepare_analytics=None,checkpoint_store=None,
+                 outcome_artifact_current=None,build_index=None,prepare_analytics=None,checkpoint_store=None,
                  settings=HistoricalAnalysisSettings(),should_cancel=None,
                  observer_factory=HistoricalPipelineObserver):
         self.operations={PipelineStage.DOWNLOAD_UNDERLYING:sync_underlying,PipelineStage.DOWNLOAD_OPTIONS:download_options,
@@ -134,6 +134,7 @@ class HistoricalAnalysisOrchestrator:
             PipelineStage.BUILD_INDEX:build_index,PipelineStage.PREPARE_ANALYTICS:prepare_analytics}
         self.checkpoints=checkpoint_store; self.settings=settings; self.should_cancel=should_cancel or (lambda:False); self.cancel_requested=False
         self.intelligence_artifact_current=intelligence_artifact_current
+        self.outcome_artifact_current=outcome_artifact_current
         self.observer_factory=observer_factory
     def cancel_after_current_date(self): self.cancel_requested=True
     def _intelligence_artifact_current(self, request, day):
@@ -160,6 +161,30 @@ class HistoricalAnalysisOrchestrator:
         except Exception:
             # Reuse is an optimization. Any checker failure must fall back to
             # the established deterministic rebuild path.
+            return False
+
+    def _outcome_artifact_current(self, request, day):
+        """Return whether stored outcomes match the current intelligence set."""
+        checker = self.outcome_artifact_current
+
+        if not callable(checker):
+            operation = self.operations.get(PipelineStage.BUILD_OUTCOMES)
+            owner = getattr(operation, "__self__", None)
+            checker = getattr(owner, "outcome_artifact_current", None)
+
+        if not callable(checker):
+            # The explicitly wired intelligence checker normally belongs to the
+            # pipeline composition and provides a safe compatibility route when
+            # build_outcomes was wrapped by the application.
+            owner = getattr(self.intelligence_artifact_current, "__self__", None)
+            checker = getattr(owner, "outcome_artifact_current", None)
+
+        if not callable(checker):
+            return False
+
+        try:
+            return bool(checker(request.range_request(day)))
+        except Exception:
             return False
 
     def _invoke(self,stage,request,day):
@@ -193,7 +218,7 @@ class HistoricalAnalysisOrchestrator:
             index=next(i for i,row in enumerate(rows) if row.trading_date==day); rows[index]=replace(rows[index],**changes)
         def ready(row):
             if row.underlying in {"Provider No Data","Failed"} or row.intelligence=="Intelligence Failed": return "Retry Required"
-            if row.intelligence in {"Intelligence Complete","Intelligence Existing"} and row.outcomes in {"Outcomes Complete","Outcomes Not Evaluable","Outcomes Pending"}:
+            if row.intelligence in {"Intelligence Complete","Intelligence Existing"} and row.outcomes in {"Outcomes Complete","Outcomes Existing","Outcomes Not Evaluable","Outcomes Pending"}:
                 base="Ready" if row.options in {"Available","Partial","Existing"} else "Candle-only"
                 if row.index=="Index Failed": return f"{base} — Similarity unavailable"
                 if row.index in {"Index Pending","Not indexed"}: return "Partial"
@@ -208,7 +233,7 @@ class HistoricalAnalysisOrchestrator:
             p=HistoricalPipelineProgress(run_id,status,stage.value,status,last_percent,100.*stage_done/max(1,stage_total),current,
                 str(current) if current else None,message,len(days),len(active),sum(r.underlying in {"Existing","Downloaded"} for r in rows),
                 len(active),sum(r.options in {"Available","Existing","Skipped","Unavailable","Previously Unavailable","Failed Non-blocking"} for r in rows),sum(r.options=="Partial" for r in rows),
-                len(active),sum(r.intelligence in {"Intelligence Complete","Intelligence Existing"} for r in rows),len(active),sum(r.outcomes in {"Outcomes Complete","Outcomes Not Evaluable"} for r in rows),
+                len(active),sum(r.intelligence in {"Intelligence Complete","Intelligence Existing"} for r in rows),len(active),sum(r.outcomes in {"Outcomes Complete","Outcomes Existing","Outcomes Not Evaluable"} for r in rows),
                 len(active),sum(r.index=="Indexed" for r in rows),sum(r.index=="Index Failed" for r in rows),index_outdated,
                 downloaded,stored,completed,partial,failed,skipped,refreshed,
                 option_expiries=option_stats[0],option_contracts_total=option_stats[1],option_contracts_complete=option_stats[2],option_contracts_failed=option_stats[3],
@@ -272,7 +297,23 @@ class HistoricalAnalysisOrchestrator:
                         continue
                     if row.intelligence in {"Intelligence Complete", "Intelligence Existing"} and not request.rebuild_intelligence:
                         continue
-                if stage is PipelineStage.BUILD_OUTCOMES and (row.intelligence not in {"Intelligence Complete","Intelligence Existing"} or (row.outcomes in {"Outcomes Complete","Outcomes Not Evaluable"} and not request.rebuild_outcomes)):continue
+                if stage is PipelineStage.BUILD_OUTCOMES:
+                    if row.intelligence not in {"Intelligence Complete", "Intelligence Existing"}:
+                        continue
+                    if not request.rebuild_outcomes and self._outcome_artifact_current(request, row.trading_date):
+                        update(
+                            row.trading_date,
+                            outcomes="Outcomes Existing",
+                            explanation="Current outcome artifact reused",
+                        )
+                        observer.date_status(
+                            row.trading_date, stage.value, "Existing",
+                            reason="current outcome artifact reused",
+                            final_status="EXISTING",
+                        )
+                        continue
+                    if row.outcomes in {"Outcomes Complete", "Outcomes Existing", "Outcomes Not Evaluable"} and not request.rebuild_outcomes:
+                        continue
                 if stage is PipelineStage.BUILD_INDEX and (row.intelligence not in {"Intelligence Complete","Intelligence Existing"} or (row.index=="Indexed" and not request.rebuild_index)):continue
                 candidates.append(row.trading_date)
             observer.stage_started(stage.value,candidates)
