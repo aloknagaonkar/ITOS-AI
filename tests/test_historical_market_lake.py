@@ -261,3 +261,56 @@ def test_availability_clamps_and_reports_missing():
     result = availability(manifest, [TODAY])
     assert result.raw_complete_sessions == 1 and result.completeness_percent == pytest.approx(100/3)
     assert result.missing_intelligence_dates == (TODAY,) and result.missing_outcome_dates == (TODAY,)
+
+
+def test_outcome_artifact_current_requires_outcome_for_every_intelligence_record(tmp_path):
+    lake = LocalHistoricalMarketLake(settings(tmp_path))
+    first = intelligence(stamp=datetime.fromisoformat("2025-01-10T09:15:00+05:30"))
+    second = intelligence(stamp=datetime.fromisoformat("2025-01-10T09:20:00+05:30"))
+    lake.store_intelligence_records([first, second])
+
+    service = HistoricalOutcomeService(lake, provider="archive")
+    lake.store_raw_candles("archive", first.instrument_key, 1, TODAY, candles(count=20))
+    built = service.build([first, second])
+    assert len(built) == 2
+    assert lake.outcome_artifact_current(first.instrument_key, 1, TODAY)
+
+
+def test_outcome_artifact_current_rejects_incomplete_outcomes(tmp_path):
+    lake = LocalHistoricalMarketLake(settings(tmp_path))
+    first = intelligence(stamp=datetime.fromisoformat("2025-01-10T09:15:00+05:30"))
+    second = intelligence(stamp=datetime.fromisoformat("2025-01-10T09:20:00+05:30"))
+    lake.store_intelligence_records([first, second])
+    lake.store_raw_candles("archive", first.instrument_key, 1, TODAY, candles(count=20))
+    HistoricalOutcomeService(lake, provider="archive").build([first])
+
+    assert not lake.outcome_artifact_current(first.instrument_key, 1, TODAY)
+
+
+def test_intelligence_artifact_current_requires_complete_current_cadence(tmp_path):
+    lake = LocalHistoricalMarketLake(settings(tmp_path))
+    req = request()
+    lake.store_raw_candles("archive", req.instrument_key, 1, TODAY, candles(count=7))
+
+    expected_stamps = pd.date_range(
+        f"{TODAY} 09:15", periods=7, freq="min", tz="Asia/Kolkata"
+    )[::3]
+    records = [intelligence(stamp=stamp.to_pydatetime()) for stamp in expected_stamps]
+    lake.store_intelligence_records(records)
+
+    assert lake.intelligence_artifact_current(
+        "archive", req.instrument_key, 1, TODAY, cadence_minutes=3
+    )
+
+
+def test_intelligence_artifact_current_rejects_incomplete_artifact(tmp_path):
+    lake = LocalHistoricalMarketLake(settings(tmp_path))
+    req = request()
+    lake.store_raw_candles("archive", req.instrument_key, 1, TODAY, candles(count=7))
+    lake.store_intelligence_records([
+        intelligence(stamp=datetime.fromisoformat("2025-01-10T09:15:00+05:30"))
+    ])
+
+    assert not lake.intelligence_artifact_current(
+        "archive", req.instrument_key, 1, TODAY, cadence_minutes=3
+    )

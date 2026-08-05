@@ -253,6 +253,7 @@ class HistoricalMarketLake(Protocol):
     def query_intelligence(self, query: IntelligenceQuery) -> tuple[HistoricalIntelligenceRecord, ...]: ...
     def store_outcomes(self, records: Sequence[HistoricalOutcomeRecord]) -> None: ...
     def query_outcomes(self, instrument_key: str, start_date: date, end_date: date, engine_version: str) -> tuple[HistoricalOutcomeRecord, ...]: ...
+    def outcome_artifact_current(self, instrument_key: str, interval: int, day: date) -> bool: ...
     def get_manifest(self, provider: str, instrument_key: str, interval: int) -> DatasetManifest | None: ...
 
 
@@ -457,6 +458,43 @@ class LocalHistoricalMarketLake:
                     and set(query.quality_flags).issubset(r.quality_flags))
         return tuple(replace(r, values=dict(r.values)) for r in sorted(filter(matches, records), key=lambda v: v.analysis_timestamp))
 
+    def intelligence_artifact_current(
+        self, provider: str, instrument_key: str, interval: int, day: date,
+        *, cadence_minutes: int | None = None,
+    ) -> bool:
+        """Return True only when a complete, current intelligence artifact exists.
+
+        Completeness is validated against the stored raw session using the same
+        cadence sampling rule as HistoricalEnrichmentService. Schema and engine
+        version checks are enforced by the normal query/read path.
+        """
+        cadence = cadence_minutes or self.settings.default_analysis_cadence_minutes
+        if cadence not in self.settings.supported_analysis_cadences:
+            return False
+
+        raw = self.load_raw_candles(provider, instrument_key, interval, day)
+        if raw is None or raw.empty:
+            return False
+        normalized, _, _ = normalize_candles(raw)
+        if normalized.empty:
+            return False
+
+        step = max(1, cadence // interval)
+        expected_timestamps = {
+            normalize_timestamp(row["timestamp"]).to_pydatetime()
+            for index, row in normalized.iterrows()
+            if index % step == 0
+        }
+        if not expected_timestamps:
+            return False
+
+        records = self.query_intelligence(IntelligenceQuery(
+            instrument_key, day, day, interval,
+            engine_version=self.settings.engine_version,
+        ))
+        actual_timestamps = {record.analysis_timestamp for record in records}
+        return expected_timestamps.issubset(actual_timestamps)
+
     def store_outcomes(self, records: Sequence[HistoricalOutcomeRecord]) -> None:
         for group in _group(records, lambda r: (r.engine_version, r.instrument_key, r.interval_minutes, r.trading_date)):
             sample = group[0]; path = self._records_path("outcomes", sample.engine_version, sample.instrument_key, sample.interval_minutes, sample.trading_date)
@@ -479,6 +517,39 @@ class LocalHistoricalMarketLake:
             while day <= end_date:
                 result.extend(self._read_outcomes(interval / f"{day}.json")); day += timedelta(days=1)
         return tuple(result)
+
+    def outcome_artifact_current(
+        self, instrument_key: str, interval: int, day: date,
+    ) -> bool:
+        """Return True when every current intelligence record has an outcome.
+
+        The normal read paths enforce the configured intelligence engine and
+        outcome schema versions. Matching by intelligence record ID prevents
+        stale outcomes from being reused after intelligence is regenerated.
+        """
+        intelligence_records = self.query_intelligence(IntelligenceQuery(
+            instrument_key, day, day, interval,
+            engine_version=self.settings.engine_version,
+        ))
+        if not intelligence_records:
+            return False
+
+        outcome_path = self._records_path(
+            "outcomes", self.settings.engine_version, instrument_key, interval, day
+        )
+        outcomes = self._read_outcomes(outcome_path)
+        if not outcomes:
+            return False
+
+        expected_ids = {record.record_id for record in intelligence_records}
+        actual_ids = {
+            record.intelligence_record_id
+            for record in outcomes
+            if record.engine_version == self.settings.engine_version
+            and record.interval_minutes == interval
+            and record.trading_date == day
+        }
+        return expected_ids.issubset(actual_ids)
 
     def _manifest_path(self, provider: str, instrument: str, interval: int) -> Path:
         return self.root / "manifest" / _safe(provider) / _safe(instrument) / str(interval) / self.settings.manifest_filename
