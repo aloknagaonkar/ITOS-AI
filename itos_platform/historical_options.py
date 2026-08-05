@@ -92,44 +92,70 @@ class HistoricalOptionDownloadService:
             return result
 
         provider_expiry_count = len(expiries)
-        maximum_expiry = end_date + timedelta(days=90)
-        eligible_expiries = []
+        parsed_expiries: list[tuple[date, str]] = []
         invalid_expiries = 0
+
         for expiry_text in expiries:
             try:
                 expiry = date.fromisoformat(str(expiry_text))
             except (TypeError, ValueError):
                 invalid_expiries += 1
                 continue
-            if start_date <= expiry <= maximum_expiry:
-                eligible_expiries.append(str(expiry_text))
+            parsed_expiries.append((expiry, str(expiry_text)))
 
-        expiries = tuple(eligible_expiries)
+        parsed_expiries.sort(key=lambda item: item[0])
+
+        # Prefer the first expiry on or after the requested trading date.
+        # If the provider exposes only already-expired contracts, fall back to
+        # the most recent expiry before the trading date.
+        selected_expiry: tuple[date, str] | None = next(
+            (item for item in parsed_expiries if item[0] >= start_date),
+            None,
+        )
+        selection_reason = "ON_OR_AFTER_TRADING_DATE"
+
+        if selected_expiry is None and parsed_expiries:
+            selected_expiry = parsed_expiries[-1]
+            selection_reason = "MOST_RECENT_EXPIRED_BEFORE_TRADING_DATE"
+
+        expiries = (selected_expiry[1],) if selected_expiry else ()
+
         logger.info(
-            "expiry filtering completed date=%s provider_expiry_count=%d eligible_expiry_count=%d "
-            "invalid_expiry_count=%d maximum_expiry=%s skipped_expiry_count=%d",
+            "expiry selection completed trading_date=%s provider_expiry_count=%d "
+            "selected_expiry=%s selection_reason=%s invalid_expiry_count=%d "
+            "candidate_expiries=%s",
             start_date,
             provider_expiry_count,
-            len(expiries),
+            selected_expiry[1] if selected_expiry else "NONE",
+            selection_reason if selected_expiry else "NO_VALID_EXPIRY",
             invalid_expiries,
-            maximum_expiry,
-            provider_expiry_count - len(expiries),
+            [item[1] for item in parsed_expiries],
         )
+
         if not expiries:
             logger.info(
-                "option no-data date=%s reason=no_expiry_overlaps_requested_window "
-                "maximum_expiry=%s final_status=SKIPPED",
+                "option no-data date=%s reason=no_valid_expiry_selected "
+                "provider_expiry_count=%d final_status=SKIPPED",
                 start_date,
-                maximum_expiry,
+                provider_expiry_count,
             )
             result = HistoricalOptionDownloadResult(
-                0, 0, 0, 0, "OPTION_DATA_UNAVAILABLE",
-                ("No historical option expiry overlapped the requested trading window.",),
+                0,
+                0,
+                0,
+                0,
+                "OPTION_DATA_UNAVAILABLE",
+                ("No valid historical option expiry could be selected.",),
                 skipped_dates=requested_days,
             )
             for day in requested_days:
                 self.lake.mark_option_download_status(
-                    self.provider, instrument_key, underlying or instrument_key, interval, day, "UNAVAILABLE"
+                    self.provider,
+                    instrument_key,
+                    underlying or instrument_key,
+                    interval,
+                    day,
+                    "UNAVAILABLE",
                 )
             return result
 
@@ -251,11 +277,19 @@ class HistoricalOptionDownloadService:
             self.provider, instrument_key, interval, day
         ) == "PARTIAL"}))
         if stored:
+            # A successful partial download must always replace any stale
+            # UNAVAILABLE marker. Otherwise the next normal run incorrectly
+            # returns OPTION_DATA_PREVIOUSLY_UNAVAILABLE even though option
+            # snapshots were stored successfully.
             for day in requested_days:
-                if self.lake.option_download_status(self.provider, instrument_key, interval, day) is None:
-                    self.lake.mark_option_download_status(
-                        self.provider, instrument_key, underlying or instrument_key, interval, day, "PARTIAL"
-                    )
+                self.lake.mark_option_download_status(
+                    self.provider,
+                    instrument_key,
+                    underlying or instrument_key,
+                    interval,
+                    day,
+                    "PARTIAL",
+                )
             partial_days = requested_days
         elif not successful_candle_responses and (failed == 0 or (
             discovered and empty_candle_responses and failed == empty_candle_responses

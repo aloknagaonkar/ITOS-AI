@@ -216,10 +216,23 @@ def pipeline_stage_rows(progress: HistoricalPipelineProgress) -> tuple[Mapping[s
         statuses = {row.options for row in progress.date_statuses} if stage is PipelineStage.DOWNLOAD_OPTIONS else set()
         if stage is PipelineStage.DOWNLOAD_OPTIONS and statuses:
             terminal = statuses - {"Pending", "Waiting"}
-            status = ("Failed Non-blocking" if "Failed Non-blocking" in terminal else "Partial" if "Partial" in terminal
-                else "Previously Unavailable" if "Previously Unavailable" in terminal
-                else "Unavailable" if "Unavailable" in terminal else "Skipped" if terminal == {"Skipped"}
-                else "Complete" if terminal <= {"Available", "Existing"} else "Running")
+
+            if "Failed Non-blocking" in terminal:
+                status = "Failed Non-blocking"
+            elif "Partial" in terminal:
+                status = "Partial"
+            elif terminal & {"Available", "Existing"}:
+                # At least one requested date has usable historical option data.
+                # Do not let an unavailable date hide successful coverage.
+                status = "Complete"
+            elif "Previously Unavailable" in terminal:
+                status = "Previously Unavailable"
+            elif terminal == {"Skipped"}:
+                status = "Skipped"
+            elif "Unavailable" in terminal:
+                status = "Unavailable"
+            else:
+                status = "Running"
         elif STAGE_ORDER[stage] < current or (total and complete >= total): status = "Complete"
         elif STAGE_ORDER[stage] == current: status = "Running"
         else: status = "Waiting"
@@ -401,6 +414,16 @@ def render_historical_analytics_workspace(underlyings: Mapping[str, str], *, pro
                 st.session_state.get("historical_pipeline_cancel_requested", False)))
     if st.button("Download & Analyze", type="primary", use_container_width=True,
                  key="historical_simple_ui_download_analyze"):
+        # A new synchronous run must not display the previous run's completed
+        # progress or analytics while provider work is still in progress.
+        st.session_state["historical_pipeline_run_in_progress"] = True
+        st.session_state["historical_pipeline_cancel_requested"] = False
+        st.session_state.pop("historical_pipeline_run_active", None)
+        st.session_state.pop("historical_pipeline_results_current", None)
+        st.session_state.pop("historical_pipeline_progress_current", None)
+        st.session_state.pop("historical_pipeline_start_error", None)
+        st.session_state.pop(PREFIX+"result", None)
+
         run_id = generate_run_id()
         click_observer = HistoricalPipelineObserver(run_id, log_root=settings.historical_log_root,
             checkpoint_path=lake.root / "runs" / f"{run_id}.json",
@@ -423,8 +446,10 @@ def render_historical_analytics_workspace(underlyings: Mapping[str, str], *, pro
             click_observer.close()
             run_request.validate(settings, underlyings)
             orchestrator = make_orchestrator(run_request)
-            st.session_state["historical_pipeline_cancel_requested"] = False
+            st.session_state["historical_pipeline_run_request"] = run_request
             progress_box = st.empty()
+            with progress_box.container():
+                st.info("Historical analysis is running. Waiting for the first pipeline update…")
             presenter = PipelineProgressPresenter(progress_box)
             def report(value):
                 st.session_state["historical_pipeline_progress_current"] = value
@@ -432,18 +457,22 @@ def render_historical_analytics_workspace(underlyings: Mapping[str, str], *, pro
             run = orchestrator.run(run_request, progress_callback=report, run_id=run_id)
             st.session_state.pop("historical_pipeline_start_error", None)
             st.session_state["historical_pipeline_run_active"] = run
-            st.session_state["historical_pipeline_run_request"] = run_request
             st.session_state["historical_pipeline_results_current"] = run.analytics
             st.session_state[PREFIX+"result"] = run.analytics
+            st.session_state["historical_pipeline_run_in_progress"] = False
+            st.rerun()
         except ValueError as error:
+            st.session_state["historical_pipeline_run_in_progress"] = False
             if click_observer._handler in click_observer.logger.handlers:
                 click_observer.stage_failed("BUTTON_CALLBACK", error); click_observer.close()
             st.error(str(error))
         except HistoricalAuthenticationError as error:
+            st.session_state["historical_pipeline_run_in_progress"] = False
             if click_observer._handler in click_observer.logger.handlers:
                 click_observer.stage_failed("BUTTON_CALLBACK", error); click_observer.close()
             st.error("Authentication required before historical data can be downloaded.")
         except Exception as error:
+            st.session_state["historical_pipeline_run_in_progress"] = False
             st.session_state["historical_pipeline_start_error"] = (
                 "Historical Analysis could not complete. "
                 "Review Pipeline Diagnostics and application logs."
@@ -457,8 +486,15 @@ def render_historical_analytics_workspace(underlyings: Mapping[str, str], *, pro
         include_options=False, rebuild_options=rebuild_options,
     )
     _developer_panel(lake, provider, manager_request, actions, sync_manager, cadence)
+    run_in_progress = bool(
+        st.session_state.get("historical_pipeline_run_in_progress", False)
+    )
     progress = st.session_state.get("historical_pipeline_progress_current")
-    if isinstance(progress, HistoricalPipelineProgress): render_pipeline_progress(progress)
+    if isinstance(progress, HistoricalPipelineProgress):
+        render_pipeline_progress(progress)
+    elif run_in_progress:
+        st.info("Historical analysis is running…")
+
     active_run = st.session_state.get("historical_pipeline_run_active")
     if active_run is not None:
         st.caption("Interactive cancellation is unavailable while this synchronous workflow is running; completed checkpoints remain resumable after an interruption.")
@@ -480,6 +516,13 @@ def render_historical_analytics_workspace(underlyings: Mapping[str, str], *, pro
                     saved_request, active_run.run_id)
                 st.session_state["historical_pipeline_run_active"] = run
                 st.session_state["historical_pipeline_progress_current"] = run.progress
+    if run_in_progress:
+        st.caption(
+            "The previous completed dashboard is hidden until the current "
+            "Download & Analyze workflow finishes."
+        )
+        return
+
     result = st.session_state.get(PREFIX+"result")
     if not isinstance(result, HistoricalAnalyticsResult):
         st.info("Choose an underlying and dates, then click **Download & Analyze**. Nothing runs before that click.")
